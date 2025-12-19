@@ -22,12 +22,12 @@ export function Hero() {
           Nothing is saved unless you choose to save it
         </p>
 
-        <Link className="contents max-sm:hidden" href="/#contact">
+        <Link className="contents max-sm:hidden" href="/vent">
           <Button className="mt-14" onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}>
             [Vent Out]
           </Button>
         </Link>
-        <Link className="contents sm:hidden" href="/#contact">
+        <Link className="contents sm:hidden" href="/vent">
           <Button
             size="sm"
             className="mt-14"
