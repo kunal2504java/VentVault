@@ -13,7 +13,7 @@ export const Header = () => {
   const menuItems = [
     { name: "About", href: "#about" },
     { name: "Listening Space", href: "#listening-space" },
-    { name: "Your Mood Map", href: "#your-mood-map" },
+    { name: "Your Mood Map", href: "/mood-map" },
     { name: "Showing Up", href: "#showing-up" },
     { name: "Quiet Connections", href: "#quiet-connections" },
     { name: "Privacy & Control", href: "#privacy-control" },
