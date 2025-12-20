@@ -1,13 +1,29 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { GL } from "@/components/gl"
-import { Button } from "@/components/ui/button"
 import { Leva } from "leva"
 import { DotFlow, type DotFlowProps } from "@/components/ui/dot-flow"
 import { ChatInput, ChatInputTextArea, ChatInputSubmit } from "@/components/ui/chat-input"
 import { AIVoiceInput } from "@/components/ui/ai-voice-input"
 import { BackendStatus } from "@/components/backend-status"
+import { Typewriter } from "@/components/ui/typewriter-text"
+
+// Calming messages to show while AI is generating response
+const calmingMessages = [
+  "Take a deep breath...",
+  "You're doing great by opening up",
+  "Have a sip of water",
+  "It's okay to feel this way",
+  "You're not alone in this",
+  "One moment at a time",
+  "Your feelings are valid",
+  "Breathe in... breathe out...",
+  "You matter more than you know",
+  "This too shall pass",
+  "Be gentle with yourself",
+  "You're stronger than you think",
+]
 
 const writingFrames = [
   [0, 2, 4, 6, 20, 34, 48, 46, 44, 42, 28, 14, 8, 22, 36, 38, 40, 26, 12, 10, 16, 30, 24, 18, 32],
@@ -96,7 +112,7 @@ const soundWaveFrames = [
 
 const textVentItems: DotFlowProps["items"] = [
   {
-    title: "Write it out",
+    title: "Type freely",
     frames: writingFrames,
     duration: 180,
     repeatCount: 1,
@@ -108,7 +124,7 @@ const textVentItems: DotFlowProps["items"] = [
     duration: 100,
   },
   {
-    title: "Let words flow",
+    title: "Type freely",
     frames: pencilFrames,
     repeatCount: 2,
     duration: 150,
@@ -123,18 +139,23 @@ const voiceVentItems: DotFlowProps["items"] = [
     repeatCount: 1,
   },
   {
-    title: "Let it out",
+    title: "Speak freely",
     frames: micFrames,
     repeatCount: 2,
     duration: 200,
   },
   {
-    title: "Your voice matters",
+    title: "Speak freely",
     frames: soundWaveFrames,
     repeatCount: 3,
     duration: 120,
   },
 ]
+
+interface Message {
+  role: "user" | "assistant"
+  content: string
+}
 
 export default function VentPage() {
   const [ventMode, setVentMode] = useState<"choice" | "text" | "voice" | null>(null)
@@ -145,6 +166,17 @@ export default function VentPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingDuration, setRecordingDuration] = useState(0)
+  
+  // Chat continuation state
+  const [isChatMode, setIsChatMode] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [chatInput, setChatInput] = useState("")
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
 
   useEffect(() => {
     const checkTime = () => {
@@ -243,19 +275,89 @@ export default function VentPage() {
     setVentMode(null)
     setIsRecording(false)
     setRecordingDuration(0)
+    setIsChatMode(false)
+    setMessages([])
+    setChatInput("")
+  }
+
+  const handleContinue = () => {
+    // Initialize chat with the first exchange
+    setMessages([
+      { role: "user", content: ventText },
+      { role: "assistant", content: aiResponse }
+    ])
+    setIsChatMode(true)
+    setChatInput("")
+  }
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || isLoading) return
+
+    const userMessage = chatInput.trim()
+    setChatInput("")
+    
+    // Add user message to chat
+    setMessages(prev => [...prev, { role: "user", content: userMessage }])
+    
+    setIsLoading(true)
+
+    // Build conversation context for the API
+    const conversationContext = messages
+      .map(m => `${m.role === "user" ? "User" : "VentVault"}: ${m.content}`)
+      .join("\n\n")
+    
+    const fullContext = `${conversationContext}\n\nUser: ${userMessage}`
+
+    // Import API client dynamically
+    const { streamVent } = await import("@/lib/api-client")
+
+    let assistantResponse = ""
+
+    // Stream response from backend
+    await streamVent(
+      {
+        mode: "text",
+        content: fullContext,
+      },
+      // On each token
+      (token) => {
+        assistantResponse += token
+        setMessages(prev => {
+          const newMessages = [...prev]
+          const lastMessage = newMessages[newMessages.length - 1]
+          if (lastMessage?.role === "assistant" && newMessages.length > messages.length + 1) {
+            // Update existing assistant message
+            newMessages[newMessages.length - 1] = { role: "assistant", content: assistantResponse }
+          } else {
+            // Add new assistant message
+            newMessages.push({ role: "assistant", content: assistantResponse })
+          }
+          return newMessages
+        })
+      },
+      // On complete
+      () => {
+        setIsLoading(false)
+      },
+      // On error
+      (error) => {
+        setIsLoading(false)
+        setMessages(prev => [...prev, { role: "assistant", content: `Sorry, something went wrong: ${error}` }])
+      },
+    )
   }
 
   return (
     <>
       <BackendStatus />
       <Leva
-        collapsed={false}
+        collapsed={true}
         oneLineLabels={true}
         flat={true}
         theme={{
           sizes: {
-            rootWidth: "240px",
-            controlWidth: "100px",
+            rootWidth: "280px",
+            controlWidth: "120px",
             scrubberWidth: "8px",
             scrubberHeight: "14px",
             rowHeight: "24px",
@@ -266,7 +368,7 @@ export default function VentPage() {
             colorPickerWidth: "140px",
             colorPickerHeight: "100px",
             monitorHeight: "40px",
-            titleBarHeight: "32px",
+            titleBarHeight: "36px",
           },
           radii: {
             xs: "4px",
@@ -281,31 +383,42 @@ export default function VentPage() {
             colGap: "4px",
           },
           fontSizes: {
-            root: "10px",
+            root: "11px",
             toolTip: "10px",
           },
           colors: {
             elevation1: "#1a1a1a",
             elevation2: "#222222",
             elevation3: "#2a2a2a",
-            accent1: "#D4AF37",
-            accent2: "#c9a432",
-            accent3: "#bfa02e",
+            accent1: "#FFC700",
+            accent2: "#e6b300",
+            accent3: "#ccaa00",
             highlight1: "#333333",
             highlight2: "#444444",
             highlight3: "#555555",
-            vivid1: "#D4AF37",
-            folderWidgetColor: "#D4AF37",
+            vivid1: "#FFC700",
+            folderWidgetColor: "#FFC700",
             folderTextColor: "#e5e5e5",
             toolTipBackground: "#1a1a1a",
             toolTipText: "#e5e5e5",
           },
         }}
         titleBar={{
-          position: { x: -10, y: 50 },
-          title: "Particles",
+          position: { x: 0, y: 0 },
+          title: "Change Appearance",
         }}
+        hideCopyButton={true}
       />
+      
+      {/* Custom styles to position Leva at bottom right */}
+      <style jsx global>{`
+        .leva-c-kWgxhW {
+          top: auto !important;
+          bottom: 20px !important;
+          right: 20px !important;
+          left: auto !important;
+        }
+      `}</style>
 
       <div
         className={`min-h-screen transition-colors duration-700 ${
@@ -321,9 +434,8 @@ export default function VentPage() {
             {!ventMode && (
               <div className="text-center space-y-12">
                 <h1
-                  className={`text-3xl md:text-4xl lg:text-5xl font-sentient mb-12 transition-colors duration-700 ${
-                    isDayMode ? "text-neutral-800" : "text-stone-100"
-                  }`}
+                  className="text-3xl md:text-4xl lg:text-5xl font-sentient mb-12 transition-colors duration-700"
+                  style={{ color: "#FFC700" }}
                 >
                   How would you like to <i className="font-light">vent</i>?
                 </h1>
@@ -350,9 +462,8 @@ export default function VentPage() {
               <div className="w-full max-w-3xl flex flex-col h-[70vh]">
                 {/* Back button */}
                 <div className="mb-6">
-                  <Button
-                    onClick={() => setVentMode("choice")}
-                    variant="ghost"
+                  <button
+                    onClick={() => setVentMode(null)}
                     className={`px-4 py-2 font-mono text-sm tracking-wider rounded-full transition-all duration-300 ${
                       isDayMode
                         ? "text-neutral-600 hover:bg-neutral-200/50"
@@ -360,13 +471,25 @@ export default function VentPage() {
                     }`}
                   >
                     ← Back
-                  </Button>
+                  </button>
                 </div>
 
                 {/* Chat area that grows */}
-                <div className="flex-1 flex flex-col justify-end">
-                  {/* Messages would go here in future */}
-                  <div className="flex-1" />
+                <div className="flex-1 flex flex-col justify-center">
+                  {/* Calming typewriter text in center */}
+                  <div className="flex-1 flex items-center justify-center">
+                    <Typewriter
+                      text={calmingMessages}
+                      speed={70}
+                      deleteSpeed={35}
+                      delay={2500}
+                      loop={true}
+                      cursor=""
+                      className={`text-xl md:text-2xl lg:text-3xl font-sentient text-center transition-colors duration-700 ${
+                        isDayMode ? "text-neutral-700" : "text-white"
+                      }`}
+                    />
+                  </div>
 
                   {/* Chat Input at bottom */}
                   <ChatInput
@@ -393,9 +516,8 @@ export default function VentPage() {
               <div className="w-full max-w-xl flex flex-col items-center">
                 {/* Back button */}
                 <div className="w-full mb-8">
-                  <Button
+                  <button
                     onClick={() => setVentMode(null)}
-                    variant="ghost"
                     className={`px-4 py-2 font-mono text-sm tracking-wider rounded-full transition-all duration-300 ${
                       isDayMode
                         ? "text-neutral-600 hover:bg-neutral-200/50"
@@ -403,7 +525,7 @@ export default function VentPage() {
                     }`}
                   >
                     ← Back
-                  </Button>
+                  </button>
                 </div>
 
                 {/* Title */}
@@ -442,42 +564,153 @@ export default function VentPage() {
               </div>
             )}
 
-            {isReleased && (
-              <div
-                className={`w-full max-w-2xl transition-opacity duration-1000 ${aiResponse ? "opacity-100" : "opacity-0"}`}
-              >
-                <p
-                  className={`text-lg md:text-xl leading-relaxed mb-12 transition-colors duration-700 font-sentient ${
-                    isDayMode ? "text-neutral-700" : "text-stone-200"
-                  }`}
+            {isReleased && !isChatMode && (
+              <div className="w-full max-w-2xl flex flex-col items-center justify-center min-h-[50vh]">
+                {/* Loading state with calming typewriter */}
+                {isLoading && !aiResponse && (
+                  <div className="text-center">
+                    <Typewriter
+                      text={calmingMessages}
+                      speed={60}
+                      deleteSpeed={30}
+                      delay={2000}
+                      loop={true}
+                      cursor=""
+                      className={`text-xl md:text-2xl lg:text-3xl font-sentient transition-colors duration-700 ${
+                        isDayMode ? "text-neutral-600" : "text-stone-300"
+                      }`}
+                    />
+                  </div>
+                )}
+
+                {/* AI Response */}
+                <div
+                  className={`w-full transition-opacity duration-1000 ${aiResponse ? "opacity-100" : "opacity-0"}`}
                 >
-                  {aiResponse}
-                </p>
+                  <p
+                    className={`text-lg md:text-xl leading-relaxed mb-12 transition-colors duration-700 font-sentient whitespace-pre-wrap ${
+                      isDayMode ? "text-neutral-700" : "text-stone-200"
+                    }`}
+                  >
+                    {aiResponse}
+                  </p>
 
-                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                  <Button
+                  {!isLoading && aiResponse && (
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                      <button
+                        onClick={handleAnotherVent}
+                        className={`px-8 py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 ${
+                          isDayMode
+                            ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
+                            : "border-neutral-700 text-neutral-300 hover:bg-neutral-900"
+                        }`}
+                      >
+                        Another vent
+                      </button>
+
+                      <button
+                        onClick={handleContinue}
+                        className={`px-8 py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 ${
+                          isDayMode
+                            ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
+                            : "border-neutral-700 text-neutral-300 hover:bg-neutral-900"
+                        }`}
+                      >
+                        Continue
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Chat Continuation Mode */}
+            {isChatMode && (
+              <div className="w-full max-w-3xl flex flex-col h-[85vh]">
+                {/* Header with back button */}
+                <div className="mb-4 flex items-center justify-between">
+                  <button
                     onClick={handleAnotherVent}
-                    variant="outline"
-                    className={`px-8 py-3 font-mono text-sm tracking-wider rounded-full transition-all duration-300 ${
+                    className={`px-4 py-2 font-mono text-sm tracking-wider rounded-full transition-all duration-300 ${
                       isDayMode
-                        ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
-                        : "border-neutral-700 text-neutral-300 hover:bg-neutral-900"
+                        ? "text-neutral-600 hover:bg-neutral-200/50"
+                        : "text-neutral-400 hover:bg-neutral-800/50"
                     }`}
                   >
-                    Another vent
-                  </Button>
+                    ← New vent
+                  </button>
+                </div>
 
-                  <Button
-                    onClick={() => {}}
-                    variant="outline"
-                    className={`px-8 py-3 font-mono text-sm tracking-wider rounded-full transition-all duration-300 ${
-                      isDayMode
-                        ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
-                        : "border-neutral-700 text-neutral-300 hover:bg-neutral-900"
+                {/* Messages area */}
+                <div className={`flex-1 overflow-y-auto space-y-6 pb-4 pr-2 ${isDayMode ? "custom-scrollbar-light" : "custom-scrollbar"}`}>
+                  {messages.map((message, index) => (
+                    <div
+                      key={index}
+                      className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[85%] px-5 py-4 rounded-2xl transition-all duration-300 ${
+                          message.role === "user"
+                            ? isDayMode
+                              ? "bg-neutral-800 text-white"
+                              : "bg-neutral-700 text-white"
+                            : isDayMode
+                              ? "bg-white/80 text-neutral-700 border border-neutral-200"
+                              : "bg-neutral-900/60 text-stone-200 border border-neutral-800"
+                        }`}
+                      >
+                        <p className="text-sm md:text-base leading-relaxed font-sentient whitespace-pre-wrap">
+                          {message.content}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* Loading indicator with calming typewriter */}
+                  {isLoading && messages[messages.length - 1]?.role === "user" && (
+                    <div className="flex justify-start">
+                      <div
+                        className={`px-5 py-4 rounded-2xl ${
+                          isDayMode
+                            ? "bg-white/80 border border-neutral-200"
+                            : "bg-neutral-900/60 border border-neutral-800"
+                        }`}
+                      >
+                        <Typewriter
+                          text={calmingMessages}
+                          speed={50}
+                          deleteSpeed={25}
+                          delay={1500}
+                          loop={true}
+                          cursor=""
+                          className={`text-sm md:text-base font-sentient ${
+                            isDayMode ? "text-neutral-500" : "text-stone-400"
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Chat Input */}
+                <div className="mt-4">
+                  <ChatInput
+                    variant="default"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onSubmit={handleSendMessage}
+                    loading={isLoading}
+                    onStop={() => setIsLoading(false)}
+                    rows={2}
+                    isDayMode={isDayMode}
+                    className={`backdrop-blur-md ${
+                      isDayMode ? "shadow-lg shadow-neutral-200/50" : "shadow-xl shadow-black/30"
                     }`}
                   >
-                    Continue
-                  </Button>
+                    <ChatInputTextArea placeholder="Continue the conversation..." autoFocus />
+                    <ChatInputSubmit />
+                  </ChatInput>
                 </div>
               </div>
             )}

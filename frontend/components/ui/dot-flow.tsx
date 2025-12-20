@@ -49,15 +49,12 @@ export function DotFlow({ items, isDayMode = false }: DotFlowProps) {
         {Array.from({ length: 49 }).map((_, i) => (
           <div
             key={i}
-            className={`w-3 h-3 rounded-full transition-all duration-200 ${
-              activeDots.includes(i)
-                ? isDayMode
-                  ? "bg-neutral-800 scale-110"
-                  : "bg-primary scale-110"
-                : isDayMode
-                  ? "bg-neutral-300"
-                  : "bg-neutral-800"
-            }`}
+            style={{
+              backgroundColor: activeDots.includes(i) ? "#FFC700" : (isDayMode ? "#d4d4d4" : "#404040"),
+              boxShadow: activeDots.includes(i) ? "0 0 8px rgba(255, 199, 0, 0.6)" : "none",
+              transform: activeDots.includes(i) ? "scale(1.1)" : "scale(1)",
+            }}
+            className="w-3 h-3 rounded-full transition-all duration-200"
           />
         ))}
       </div>

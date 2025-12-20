@@ -17,6 +17,12 @@ class UserTier(str, Enum):
     PREMIUM = "premium"
 
 
+class ChatMessage(BaseModel):
+    """A single message in the conversation"""
+    role: Literal["user", "assistant"] = Field(..., description="Message sender role")
+    content: str = Field(..., description="Message content")
+
+
 class VentRequest(BaseModel):
     """Request model for creating a vent"""
     mode: VentMode = Field(default=VentMode.TEXT, description="Vent input mode")
@@ -25,6 +31,11 @@ class VentRequest(BaseModel):
         min_length=1, 
         max_length=5000,
         description="Vent content (text or voice transcript)"
+    )
+    history: Optional[list[ChatMessage]] = Field(
+        default=None,
+        max_length=20,
+        description="Previous conversation messages for context (max 20 messages)"
     )
     
     @field_validator('content')

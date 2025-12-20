@@ -13,8 +13,9 @@ class Settings(BaseSettings):
     # LLM Configuration
     openai_api_key: str = Field(default="", description="OpenAI API key")
     anthropic_api_key: str = Field(default="", description="Anthropic API key")
-    llm_provider: Literal["openai", "anthropic"] = Field(
-        default="openai", 
+    google_api_key: str = Field(default="", description="Google Gemini API key")
+    llm_provider: Literal["openai", "anthropic", "google"] = Field(
+        default="google", 
         description="LLM provider to use"
     )
     llm_model_openai: str = Field(
@@ -24,6 +25,10 @@ class Settings(BaseSettings):
     llm_model_anthropic: str = Field(
         default="claude-3-haiku-20240307", 
         description="Anthropic model name"
+    )
+    llm_model_google: str = Field(
+        default="gemini-2.5-flash-preview-05-20", 
+        description="Google Gemini model name"
     )
     
     # Redis Configuration
@@ -46,9 +51,9 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, description="Enable debug mode")
     
     # Performance Tuning
-    max_output_tokens: int = Field(default=120, ge=50, le=500)
-    llm_temperature: float = Field(default=0.6, ge=0.0, le=1.0)
-    llm_timeout: float = Field(default=10.0, description="LLM request timeout in seconds")
+    max_output_tokens: int = Field(default=2048, ge=50, le=8192)
+    llm_temperature: float = Field(default=0.7, ge=0.0, le=1.0)
+    llm_timeout: float = Field(default=30.0, description="LLM request timeout in seconds")
     
     # CORS Configuration
     cors_origins: list[str] = Field(
@@ -70,6 +75,8 @@ class Settings(BaseSettings):
         if self.llm_provider == "openai" and not self.openai_api_key:
             return False
         if self.llm_provider == "anthropic" and not self.anthropic_api_key:
+            return False
+        if self.llm_provider == "google" and not self.google_api_key:
             return False
         return True
 
