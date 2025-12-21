@@ -2,11 +2,11 @@
 VentVault Backend API
 Privacy-first emotional venting platform
 
-Hot Path Design:
-1. Rate limit check (Redis)
-2. PII scrubbing (in-memory)
-3. LLM streaming (async)
-4. No database writes during vent
+Features:
+- Streaming LLM responses
+- Anonymous analytics (no content stored)
+- Consent-based location tracking
+- GDPR/CCPA compliant data handling
 """
 
 from fastapi import FastAPI, Request, HTTPException, Depends
@@ -19,6 +19,7 @@ import time
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings, Settings
 from app.models import (
@@ -27,11 +28,21 @@ from app.models import (
     HealthResponse, 
     UsageResponse,
     ErrorResponse,
-    VentMetadata
+    ConsentRequest,
+    ConsentResponse,
+    LocationResponse,
+    AnalyticsResponse,
+    DataExportResponse
 )
 from app.pii_scrubber import PIIScrubber
 from app.rate_limiter import RateLimiter
 from app.llm_service import LLMService
+from app.database import init_database, close_database, get_db
+from app.analytics_service import AnalyticsService
+from app.location_service import LocationService
+from app.consent_service import ConsentService
+from app.db_models import ConsentType
+from app.auth_service import ClerkAuthService, ClerkUser, get_auth_service
 
 # Configure logging
 logging.basicConfig(
@@ -48,6 +59,10 @@ class AppState:
     redis_client: Optional[redis.Redis] = None
     rate_limiter: Optional[RateLimiter] = None
     llm_service: Optional[LLMService] = None
+    analytics_service: Optional[AnalyticsService] = None
+    location_service: Optional[LocationService] = None
+    consent_service: Optional[ConsentService] = None
+    auth_service: Optional[ClerkAuthService] = None
     settings: Optional[Settings] = None
 
 
@@ -62,6 +77,13 @@ async def lifespan(app: FastAPI):
     
     logger.info(f"Starting VentVault Backend ({settings.environment})")
     
+    # Initialize Database
+    try:
+        await init_database()
+        logger.info("✅ Database connected")
+    except Exception as e:
+        logger.error(f"❌ Database connection failed: {e}")
+    
     # Initialize Redis with connection pool
     try:
         state.redis_client = await redis.from_url(
@@ -70,7 +92,6 @@ async def lifespan(app: FastAPI):
             decode_responses=True,
             max_connections=settings.redis_pool_size
         )
-        # Test connection
         await state.redis_client.ping()
         logger.info("✅ Redis connected")
     except Exception as e:
@@ -94,6 +115,19 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("⚠️ LLM service not properly configured")
     
+    # Initialize analytics, location, and consent services
+    state.analytics_service = AnalyticsService()
+    state.location_service = LocationService()
+    state.consent_service = ConsentService()
+    logger.info("✅ Analytics, Location, and Consent services initialized")
+    
+    # Initialize Clerk auth service
+    state.auth_service = ClerkAuthService(settings.clerk_publishable_key)
+    if state.auth_service.is_configured():
+        logger.info("✅ Clerk authentication initialized")
+    else:
+        logger.warning("⚠️ Clerk not configured - auth features disabled")
+    
     logger.info("🚀 VentVault Backend Ready")
     
     yield
@@ -103,6 +137,11 @@ async def lifespan(app: FastAPI):
         await state.redis_client.close()
         logger.info("Redis connection closed")
     
+    if state.location_service:
+        await state.location_service.close()
+    
+    await close_database()
+    
     logger.info("👋 VentVault Backend Stopped")
 
 
@@ -110,7 +149,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="VentVault API",
     description="Privacy-first emotional venting platform",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
     docs_url="/docs" if get_settings().environment != "production" else None,
     redoc_url="/redoc" if get_settings().environment != "production" else None
@@ -122,9 +161,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["X-Session-ID", "X-Remaining-Vents", "X-Reset-Seconds"]
+    expose_headers=["X-Session-ID", "X-Remaining-Vents", "X-Reset-Seconds", "X-User-ID"]
 )
 
 
@@ -155,7 +194,6 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Helper functions
 def get_client_info(request: Request) -> tuple[str, str]:
     """Extract client IP and user agent from request"""
-    # Handle proxied requests
     forwarded_for = request.headers.get("x-forwarded-for")
     if forwarded_for:
         ip = forwarded_for.split(",")[0].strip()
@@ -168,27 +206,37 @@ def get_client_info(request: Request) -> tuple[str, str]:
 
 def get_user_id(request: Request) -> Optional[str]:
     """Extract user ID from auth header (future implementation)"""
-    # TODO: Implement auth token validation
     auth_header = request.headers.get("authorization")
     if auth_header and auth_header.startswith("Bearer "):
-        # Validate token and extract user ID
         pass
     return None
+
+
+async def get_authenticated_user(request: Request) -> Optional[ClerkUser]:
+    """
+    Extract and verify authenticated user from Clerk JWT.
+    Returns None for anonymous users.
+    """
+    auth_header = request.headers.get("authorization")
+    if not auth_header:
+        return None
+    
+    if not state.auth_service:
+        return None
+    
+    return await state.auth_service.verify_token(auth_header)
 
 
 # Routes
 @app.get("/", include_in_schema=False)
 async def root():
     """Root endpoint"""
-    return {"status": "ok", "service": "VentVault API", "version": "1.0.0"}
+    return {"status": "ok", "service": "VentVault API", "version": "2.0.0"}
 
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """
-    Health check endpoint for monitoring.
-    Returns service status and component health.
-    """
+    """Health check endpoint for monitoring."""
     redis_status = "disconnected"
     if state.redis_client:
         try:
@@ -199,8 +247,19 @@ async def health_check():
     
     llm_status = "configured" if state.llm_service and state.llm_service.is_healthy() else "not_configured"
     
-    # Determine overall status
-    if redis_status == "connected" and llm_status == "configured":
+    # Check database
+    db_status = "connected"
+    try:
+        from app.database import _engine
+        if _engine:
+            async with _engine.connect() as conn:
+                await conn.execute("SELECT 1")
+        else:
+            db_status = "disconnected"
+    except:
+        db_status = "disconnected"
+    
+    if redis_status == "connected" and llm_status == "configured" and db_status == "connected":
         status = "healthy"
     elif redis_status == "connected" or llm_status == "configured":
         status = "degraded"
@@ -211,45 +270,48 @@ async def health_check():
         status=status,
         redis=redis_status,
         llm=llm_status,
+        database=db_status,
         environment=state.settings.environment if state.settings else "unknown"
     )
 
 
 @app.get("/api/usage", response_model=UsageResponse)
 async def get_usage(request: Request):
-    """
-    Get current rate limit usage for the client.
-    Does not count against rate limit.
-    """
+    """Get current rate limit usage for the client."""
     if not state.rate_limiter:
         raise HTTPException(status_code=503, detail="Rate limiter unavailable")
     
     ip, user_agent = get_client_info(request)
-    user_id = get_user_id(request)
     
-    usage = await state.rate_limiter.get_usage(ip, user_agent, user_id)
+    # Check for authenticated user
+    auth_user = await get_authenticated_user(request)
+    user_id = auth_user.user_id if auth_user else None
+    user_tier = auth_user.tier if auth_user else None
+    
+    usage = await state.rate_limiter.get_usage(ip, user_agent, user_id, user_tier)
     return UsageResponse(**usage)
 
 
 @app.post("/api/vent")
-async def create_vent(request: Request, vent: VentRequest):
+async def create_vent(
+    request: Request, 
+    vent: VentRequest,
+    db: AsyncSession = Depends(get_db)
+):
     """
     🔥 HOT PATH - Core vent endpoint
     
     Creates a new vent and streams AI response.
-    
-    Flow:
-    1. Rate limit check (Redis) - ~5ms
-    2. PII scrubbing (in-memory) - ~1ms
-    3. LLM streaming (async) - ~500-1500ms
-    
-    No database writes occur during this request.
+    Records anonymous analytics (no content stored).
     """
     start_time = time.perf_counter()
     
-    # Extract client info
     ip, user_agent = get_client_info(request)
-    user_id = get_user_id(request)
+    
+    # Check for authenticated user (Clerk)
+    auth_user = await get_authenticated_user(request)
+    user_id = auth_user.user_id if auth_user else None
+    user_tier = auth_user.tier if auth_user else None
     
     # 1. Rate limit check
     if not state.rate_limiter:
@@ -257,7 +319,7 @@ async def create_vent(request: Request, vent: VentRequest):
         remaining, reset_seconds = 999, 86400
     else:
         is_allowed, remaining, reset_seconds = await state.rate_limiter.check_limit(
-            ip, user_agent, user_id
+            ip, user_agent, user_id, user_tier
         )
         if not is_allowed:
             raise HTTPException(
@@ -265,20 +327,41 @@ async def create_vent(request: Request, vent: VentRequest):
                 detail="Daily vent limit reached. Sign in for more vents."
             )
     
-    # 2. PII scrubbing (in-memory, fast)
+    # 2. PII scrubbing
     pii_detected = PIIScrubber.contains_pii(vent.content)
     scrubbed_content = PIIScrubber.scrub(vent.content)
     
     if pii_detected:
         logger.info("PII detected and scrubbed from vent")
     
-    # 3. Generate session ID
-    session_id = str(uuid.uuid4())
+    # 3. Get or create anonymous user and session
+    anonymous_user = await state.analytics_service.get_or_create_anonymous_user(
+        db, ip, user_agent
+    )
     
-    # 4. Prepare metadata (for future async processing)
-    word_count = len(scrubbed_content.split())
+    # Create or get session
+    session_id_str = request.headers.get("X-Session-ID")
+    if session_id_str:
+        try:
+            session_uuid = uuid.UUID(session_id_str)
+            # Verify session belongs to user
+            from sqlalchemy import select
+            from app.db_models import VentSession
+            result = await db.execute(
+                select(VentSession).where(
+                    VentSession.id == session_uuid,
+                    VentSession.anonymous_user_id == anonymous_user.id
+                )
+            )
+            session = result.scalar_one_or_none()
+            if not session:
+                session = await state.analytics_service.create_session(db, anonymous_user.id)
+        except:
+            session = await state.analytics_service.create_session(db, anonymous_user.id)
+    else:
+        session = await state.analytics_service.create_session(db, anonymous_user.id)
     
-    # 5. Stream LLM response
+    # 4. Stream LLM response
     async def generate():
         """Server-sent events stream generator"""
         response_tokens = []
@@ -296,21 +379,32 @@ async def create_vent(request: Request, vent: VentRequest):
                 response_tokens.append(token)
                 yield f"data: {token}\n\n"
             
-            # Send completion event
             yield f"data: [DONE]\n\n"
             
-            # Log performance metrics (no content)
-            latency_ms = (time.perf_counter() - start_time) * 1000
+            # Record analytics (async, non-blocking)
+            latency_ms = int((time.perf_counter() - start_time) * 1000)
+            
+            try:
+                from app.database import get_db_context
+                async with get_db_context() as analytics_db:
+                    await state.analytics_service.record_vent_analytics(
+                        analytics_db,
+                        session.id,
+                        scrubbed_content,
+                        vent.mode.value,
+                        latency_ms,
+                        pii_detected,
+                        continued_conversation=bool(vent.history)
+                    )
+            except Exception as e:
+                logger.error(f"Failed to record analytics: {e}")
+            
             logger.info(
                 f"⚡ Vent completed | "
-                f"latency={latency_ms:.0f}ms | "
+                f"latency={latency_ms}ms | "
                 f"tokens={len(response_tokens)} | "
-                f"remaining={remaining} | "
-                f"pii={pii_detected}"
+                f"remaining={remaining}"
             )
-            
-            # TODO: Fire async job for metadata extraction
-            # await background_tasks.add_task(process_vent_metadata, metadata)
             
         except Exception as e:
             logger.error(f"Stream error: {type(e).__name__}: {str(e)}")
@@ -323,40 +417,175 @@ async def create_vent(request: Request, vent: VentRequest):
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Connection": "keep-alive",
-            "X-Session-ID": session_id,
+            "X-Session-ID": str(session.id),
+            "X-User-ID": str(anonymous_user.id),
             "X-Remaining-Vents": str(remaining),
             "X-Reset-Seconds": str(reset_seconds)
         }
     )
 
 
-# Future endpoints (Phase 2+)
+# ============================================
+# Consent Management Endpoints
+# ============================================
 
-@app.post("/api/session/upgrade", include_in_schema=False)
-async def upgrade_session():
-    """
-    [FUTURE] Upgrade anonymous session to authenticated user.
-    Links anonymous metadata to user account.
-    """
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+@app.get("/api/consent", response_model=ConsentResponse)
+async def get_consents(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get current consent status for the user."""
+    ip, user_agent = get_client_info(request)
+    
+    anonymous_user = await state.analytics_service.get_or_create_anonymous_user(
+        db, ip, user_agent
+    )
+    
+    consents = await state.consent_service.get_user_consents(db, anonymous_user.id)
+    
+    return ConsentResponse(
+        user_id=str(anonymous_user.id),
+        consents=consents
+    )
 
 
-@app.get("/api/insights", include_in_schema=False)
-async def get_insights():
-    """
-    [FUTURE] Get mood insights and patterns.
-    Requires authentication.
-    """
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+@app.post("/api/consent", response_model=ConsentResponse)
+async def update_consents(
+    request: Request,
+    consent_request: ConsentRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update user consent preferences."""
+    ip, user_agent = get_client_info(request)
+    ip_hash = AnalyticsService.hash_ip(ip)
+    
+    anonymous_user = await state.analytics_service.get_or_create_anonymous_user(
+        db, ip, user_agent
+    )
+    
+    # Update consents
+    await state.consent_service.update_consents(
+        db, anonymous_user.id, consent_request.consents, ip_hash
+    )
+    
+    # If location consent granted, fetch and store location
+    if consent_request.consents.get("location", False):
+        await state.location_service.grant_location_consent(
+            db, anonymous_user.id, ip, ip_hash
+        )
+    elif "location" in consent_request.consents and not consent_request.consents["location"]:
+        await state.location_service.revoke_location_consent(db, anonymous_user.id)
+    
+    # Get updated consents
+    consents = await state.consent_service.get_user_consents(db, anonymous_user.id)
+    
+    return ConsentResponse(
+        user_id=str(anonymous_user.id),
+        consents=consents
+    )
 
 
-@app.delete("/api/user/data", include_in_schema=False)
-async def delete_user_data():
+# ============================================
+# Location Endpoints
+# ============================================
+
+@app.get("/api/location", response_model=LocationResponse)
+async def get_location(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get stored location (requires consent)."""
+    ip, user_agent = get_client_info(request)
+    
+    anonymous_user = await state.analytics_service.get_or_create_anonymous_user(
+        db, ip, user_agent
+    )
+    
+    # Check consent
+    has_consent = await state.location_service.has_location_consent(db, anonymous_user.id)
+    
+    if not has_consent:
+        return LocationResponse(
+            has_consent=False,
+            location=None
+        )
+    
+    location = await state.location_service.get_user_location(db, anonymous_user.id)
+    
+    return LocationResponse(
+        has_consent=True,
+        location=location
+    )
+
+
+# ============================================
+# Analytics Endpoints (Aggregate only)
+# ============================================
+
+@app.get("/api/analytics/aggregate", response_model=AnalyticsResponse)
+async def get_aggregate_analytics(
+    days: int = 30,
+    db: AsyncSession = Depends(get_db)
+):
     """
-    [FUTURE] Delete all user data.
-    GDPR compliance endpoint.
+    Get aggregate analytics (admin/dashboard use).
+    No individual user data exposed.
     """
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+    if days > 365:
+        days = 365
+    
+    stats = await state.analytics_service.get_aggregate_stats(db, days)
+    
+    return AnalyticsResponse(**stats)
+
+
+# ============================================
+# Data Privacy Endpoints (GDPR/CCPA)
+# ============================================
+
+@app.get("/api/user/data", response_model=DataExportResponse)
+async def export_user_data(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Export all user data (GDPR right to data portability).
+    Returns all stored data for the requesting user.
+    """
+    ip, user_agent = get_client_info(request)
+    
+    anonymous_user = await state.analytics_service.get_or_create_anonymous_user(
+        db, ip, user_agent
+    )
+    
+    data = await state.consent_service.export_user_data(db, anonymous_user.id)
+    
+    return DataExportResponse(data=data)
+
+
+@app.delete("/api/user/data")
+async def delete_user_data(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete all user data (GDPR right to erasure).
+    Permanently removes all data associated with the user.
+    """
+    ip, user_agent = get_client_info(request)
+    
+    anonymous_user = await state.analytics_service.get_or_create_anonymous_user(
+        db, ip, user_agent
+    )
+    
+    user_id = anonymous_user.id
+    
+    success = await state.consent_service.delete_all_user_data(db, user_id)
+    
+    if success:
+        return {"message": "All your data has been deleted", "user_id": str(user_id)}
+    else:
+        raise HTTPException(status_code=404, detail="User not found")
 
 
 # Run with uvicorn

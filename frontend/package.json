@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.36.5",
     "@eslint/eslintrc": "latest",
     "@expo/dom-webview": "latest",
     "@expo/metro-runtime": "latest",

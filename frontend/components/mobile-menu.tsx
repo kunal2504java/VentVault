@@ -5,6 +5,13 @@ import * as Dialog from "@radix-ui/react-dialog"
 import { Menu, X } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
+import {
+  SignInButton,
+  SignUpButton,
+  SignedIn,
+  SignedOut,
+  UserButton,
+} from "@clerk/nextjs"
 
 interface MobileMenuProps {
   className?: string
@@ -63,14 +70,41 @@ export const MobileMenu = ({ className }: MobileMenuProps) => {
               </Link>
             ))}
 
-            <div className="mt-12 pt-4">
-              <Link
-                href="/#sign-in"
-                onClick={handleLinkClick}
-                className="inline-block text-base font-mono uppercase text-[#D4AF37] transition-colors ease-out duration-150 hover:text-[#C5A028] py-1"
-              >
-                Sign In
-              </Link>
+            {/* Auth Section */}
+            <div className="mt-12 pt-4 border-t border-foreground/10">
+              <SignedOut>
+                <div className="flex flex-col space-y-3">
+                  <SignInButton mode="modal">
+                    <button 
+                      onClick={handleLinkClick}
+                      className="text-base font-mono uppercase transition-colors ease-out duration-150 hover:opacity-80 py-1 text-left"
+                      style={{ color: "#FFC700" }}
+                    >
+                      Sign In
+                    </button>
+                  </SignInButton>
+                  <SignUpButton mode="modal">
+                    <button 
+                      onClick={handleLinkClick}
+                      className="text-sm font-mono uppercase text-foreground/60 transition-colors ease-out duration-150 hover:text-foreground/100 py-1 text-left"
+                    >
+                      Create Account
+                    </button>
+                  </SignUpButton>
+                </div>
+              </SignedOut>
+              <SignedIn>
+                <div className="flex items-center gap-4">
+                  <UserButton 
+                    appearance={{
+                      elements: {
+                        avatarBox: "w-10 h-10"
+                      }
+                    }}
+                  />
+                  <span className="text-base font-mono text-foreground/60">My Account</span>
+                </div>
+              </SignedIn>
             </div>
           </nav>
         </Dialog.Content>

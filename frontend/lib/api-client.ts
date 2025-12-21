@@ -5,6 +5,10 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
+// Session storage key
+const SESSION_ID_KEY = "ventvault_session_id"
+const USER_ID_KEY = "ventvault_user_id"
+
 export interface VentRequest {
   mode: "text" | "voice"
   content: string
@@ -12,7 +16,42 @@ export interface VentRequest {
 
 export interface VentMetadata {
   sessionId: string
+  userId: string
   remainingVents: number
+}
+
+// Auth token getter (set by ClerkProvider)
+let getAuthToken: (() => Promise<string | null>) | null = null
+
+/**
+ * Set the auth token getter function (called from React component)
+ */
+export function setAuthTokenGetter(getter: () => Promise<string | null>): void {
+  getAuthToken = getter
+}
+
+/**
+ * Get stored session ID
+ */
+function getStoredSessionId(): string | null {
+  if (typeof window === "undefined") return null
+  return sessionStorage.getItem(SESSION_ID_KEY)
+}
+
+/**
+ * Store session ID
+ */
+function storeSessionId(sessionId: string): void {
+  if (typeof window === "undefined") return
+  sessionStorage.setItem(SESSION_ID_KEY, sessionId)
+}
+
+/**
+ * Store user ID
+ */
+function storeUserId(userId: string): void {
+  if (typeof window === "undefined") return
+  localStorage.setItem(USER_ID_KEY, userId)
 }
 
 /**
@@ -26,11 +65,28 @@ export async function streamVent(
   onError: (error: string) => void,
 ): Promise<void> {
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    }
+    
+    // Include session ID if we have one (for conversation continuity)
+    const existingSessionId = getStoredSessionId()
+    if (existingSessionId) {
+      headers["X-Session-ID"] = existingSessionId
+    }
+    
+    // Include auth token if user is signed in
+    if (getAuthToken) {
+      const token = await getAuthToken()
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`
+      }
+    }
+    
     const response = await fetch(`${API_BASE_URL}/api/vent`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
+      credentials: "include",
       body: JSON.stringify(request),
     })
 
@@ -43,7 +99,12 @@ export async function streamVent(
 
     // Extract metadata from headers
     const sessionId = response.headers.get("X-Session-ID") || ""
+    const userId = response.headers.get("X-User-ID") || ""
     const remainingVents = parseInt(response.headers.get("X-Remaining-Vents") || "0")
+    
+    // Store IDs for future requests
+    if (sessionId) storeSessionId(sessionId)
+    if (userId) storeUserId(userId)
 
     // Read streaming response
     const reader = response.body?.getReader()
@@ -72,7 +133,7 @@ export async function streamVent(
           const data = line.slice(6) // Remove "data: " prefix
 
           if (data === "[DONE]") {
-            onComplete({ sessionId, remainingVents })
+            onComplete({ sessionId, userId, remainingVents })
             return
           }
 
@@ -92,13 +153,21 @@ export async function streamVent(
 }
 
 /**
+ * Clear session (for new vent)
+ */
+export function clearSession(): void {
+  if (typeof window === "undefined") return
+  sessionStorage.removeItem(SESSION_ID_KEY)
+}
+
+/**
  * Health check endpoint
  */
 export async function checkHealth(): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE_URL}/health`)
     const data = await response.json()
-    return data.status === "healthy"
+    return data.status === "healthy" || data.status === "degraded"
   } catch {
     return false
   }

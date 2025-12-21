@@ -8,6 +8,11 @@ import { ChatInput, ChatInputTextArea, ChatInputSubmit } from "@/components/ui/c
 import { AIVoiceInput } from "@/components/ui/ai-voice-input"
 import { BackendStatus } from "@/components/backend-status"
 import { Typewriter } from "@/components/ui/typewriter-text"
+import { ConsentBanner } from "@/components/consent-banner"
+import { PrivacySettings } from "@/components/privacy-settings"
+import { Sidebar } from "@/components/sidebar"
+import { RateLimitModal } from "@/components/rate-limit-modal"
+import { useAuthApi } from "@/hooks/use-auth-api"
 
 // Calming messages to show while AI is generating response
 const calmingMessages = [
@@ -158,7 +163,7 @@ interface Message {
 }
 
 export default function VentPage() {
-  const [ventMode, setVentMode] = useState<"choice" | "text" | "voice" | null>(null)
+  const [ventMode, setVentMode] = useState<"text" | "voice" | null>(null)
   const [ventText, setVentText] = useState("")
   const [isReleased, setIsReleased] = useState(false)
   const [aiResponse, setAiResponse] = useState("")
@@ -171,7 +176,27 @@ export default function VentPage() {
   const [isChatMode, setIsChatMode] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [chatInput, setChatInput] = useState("")
+  
+  // Privacy settings state
+  const [showPrivacySettings, setShowPrivacySettings] = useState(false)
+  const [showRateLimitModal, setShowRateLimitModal] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Initialize auth API integration
+  useAuthApi()
+
+  // Handle new vent from sidebar
+  const handleNewVent = () => {
+    setVentText("")
+    setIsReleased(false)
+    setAiResponse("")
+    setVentMode(null)
+    setIsRecording(false)
+    setRecordingDuration(0)
+    setIsChatMode(false)
+    setMessages([])
+    setChatInput("")
+  }
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -219,7 +244,13 @@ export default function VentPage() {
       // On error
       (error) => {
         setIsLoading(false)
-        setAiResponse(`Sorry, something went wrong: ${error}`)
+        // Check if it's a rate limit error
+        if (error.includes("Daily vent limit") || error.includes("limit reached")) {
+          setIsReleased(false)
+          setShowRateLimitModal(true)
+        } else {
+          setAiResponse(`Sorry, something went wrong: ${error}`)
+        }
       },
     )
   }
@@ -262,13 +293,29 @@ export default function VentPage() {
         // On error
         (error) => {
           setIsLoading(false)
-          setAiResponse(`Sorry, something went wrong: ${error}`)
+          // Check if it's a rate limit error
+          if (error.includes("Daily vent limit") || error.includes("limit reached")) {
+            setIsReleased(false)
+            setShowRateLimitModal(true)
+          } else {
+            setAiResponse(`Sorry, something went wrong: ${error}`)
+          }
         },
       )
     }
   }
 
   const handleAnotherVent = () => {
+    console.log("handleAnotherVent called")
+    
+    // Clear session for fresh start
+    try {
+      sessionStorage.removeItem("ventvault_session_id")
+    } catch (e) {
+      console.error("Failed to clear session", e)
+    }
+    
+    // Reset all state
     setVentText("")
     setIsReleased(false)
     setAiResponse("")
@@ -278,6 +325,8 @@ export default function VentPage() {
     setIsChatMode(false)
     setMessages([])
     setChatInput("")
+    
+    console.log("State reset complete, ventMode set to null")
   }
 
   const handleContinue = () => {
@@ -342,7 +391,12 @@ export default function VentPage() {
       // On error
       (error) => {
         setIsLoading(false)
-        setMessages(prev => [...prev, { role: "assistant", content: `Sorry, something went wrong: ${error}` }])
+        // Check if it's a rate limit error
+        if (error.includes("Daily vent limit") || error.includes("limit reached")) {
+          setShowRateLimitModal(true)
+        } else {
+          setMessages(prev => [...prev, { role: "assistant", content: `Sorry, something went wrong: ${error}` }])
+        }
       },
     )
   }
@@ -421,7 +475,9 @@ export default function VentPage() {
       `}</style>
 
       <div
-        className={`min-h-screen transition-colors duration-700 ${
+        className={`min-h-screen transition-all duration-300 ${
+          isChatMode ? "ml-16" : ""
+        } ${
           isDayMode
             ? "bg-gradient-to-br from-stone-50 via-stone-100 to-neutral-100"
             : "bg-gradient-to-br from-black via-slate-950 to-neutral-900"
@@ -627,20 +683,6 @@ export default function VentPage() {
             {/* Chat Continuation Mode */}
             {isChatMode && (
               <div className="w-full max-w-3xl flex flex-col h-[85vh]">
-                {/* Header with back button */}
-                <div className="mb-4 flex items-center justify-between">
-                  <button
-                    onClick={handleAnotherVent}
-                    className={`px-4 py-2 font-mono text-sm tracking-wider rounded-full transition-all duration-300 ${
-                      isDayMode
-                        ? "text-neutral-600 hover:bg-neutral-200/50"
-                        : "text-neutral-400 hover:bg-neutral-800/50"
-                    }`}
-                  >
-                    ← New vent
-                  </button>
-                </div>
-
                 {/* Messages area */}
                 <div className={`flex-1 overflow-y-auto space-y-6 pb-4 pr-2 ${isDayMode ? "custom-scrollbar-light" : "custom-scrollbar"}`}>
                   {messages.map((message, index) => (
@@ -724,9 +766,42 @@ export default function VentPage() {
             >
               Nothing is saved unless you choose.
             </p>
+            <button
+              onClick={() => setShowPrivacySettings(true)}
+              className={`block mx-auto mt-2 text-xs font-mono transition-colors duration-300 ${
+                isDayMode ? "text-neutral-400 hover:text-neutral-600" : "text-neutral-600 hover:text-neutral-400"
+              }`}
+            >
+              Privacy Settings
+            </button>
           </footer>
         </div>
       </div>
+      
+      {/* Consent Banner */}
+      <ConsentBanner />
+      
+      {/* Privacy Settings Modal */}
+      <PrivacySettings
+        isOpen={showPrivacySettings}
+        onClose={() => setShowPrivacySettings(false)}
+        isDayMode={isDayMode}
+      />
+
+      {/* Sidebar - only show in chat continuation mode */}
+      {isChatMode && (
+        <Sidebar
+          onNewVent={handleNewVent}
+          isDayMode={isDayMode}
+        />
+      )}
+
+      {/* Rate Limit Modal */}
+      <RateLimitModal
+        isOpen={showRateLimitModal}
+        onClose={() => setShowRateLimitModal(false)}
+        isDayMode={isDayMode}
+      />
     </>
   )
 }

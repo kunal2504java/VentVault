@@ -91,7 +91,8 @@ class HealthResponse(BaseModel):
     status: Literal["healthy", "degraded", "unhealthy"]
     redis: Literal["connected", "disconnected"]
     llm: Literal["configured", "not_configured"]
-    version: str = "1.0.0"
+    database: Literal["connected", "disconnected"] = "disconnected"
+    version: str = "2.0.0"
     environment: str
 
 
@@ -109,3 +110,71 @@ class ErrorResponse(BaseModel):
     error: str
     detail: Optional[str] = None
     code: Optional[str] = None
+
+
+# ============================================
+# Consent Models
+# ============================================
+
+class ConsentRequest(BaseModel):
+    """Request to update consent preferences"""
+    consents: dict[str, bool] = Field(
+        ...,
+        description="Map of consent type to granted status",
+        json_schema_extra={
+            "example": {
+                "analytics": True,
+                "location": False,
+                "save_history": False
+            }
+        }
+    )
+
+
+class ConsentResponse(BaseModel):
+    """Response with current consent status"""
+    user_id: str
+    consents: dict[str, bool]
+
+
+# ============================================
+# Location Models
+# ============================================
+
+class LocationData(BaseModel):
+    """Location data (city-level only)"""
+    country_code: Optional[str] = None
+    country_name: Optional[str] = None
+    region: Optional[str] = None
+    city: Optional[str] = None
+    timezone: Optional[str] = None
+
+
+class LocationResponse(BaseModel):
+    """Response with location data"""
+    has_consent: bool
+    location: Optional[dict] = None
+
+
+# ============================================
+# Analytics Models
+# ============================================
+
+class AnalyticsResponse(BaseModel):
+    """Aggregate analytics response"""
+    period_days: int
+    total_vents: int
+    unique_users: int
+    avg_word_count: float
+    avg_response_latency_ms: float
+    avg_emotion_intensity: float
+    emotion_distribution: dict[str, int]
+
+
+# ============================================
+# Data Export Models
+# ============================================
+
+class DataExportResponse(BaseModel):
+    """Response containing all user data for export"""
+    data: dict

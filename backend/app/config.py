@@ -31,6 +31,14 @@ class Settings(BaseSettings):
         description="Google Gemini model name"
     )
     
+    # Database Configuration
+    database_url: str = Field(
+        default="postgresql+asyncpg://postgres:postgres@localhost:5432/ventvault",
+        description="PostgreSQL async connection URL"
+    )
+    db_pool_size: int = Field(default=10, description="Database connection pool size")
+    db_max_overflow: int = Field(default=20, description="Max overflow connections")
+    
     # Redis Configuration
     redis_url: str = Field(
         default="redis://localhost:6379", 
@@ -40,8 +48,8 @@ class Settings(BaseSettings):
     redis_timeout: float = Field(default=5.0, description="Redis operation timeout")
     
     # Rate Limiting
-    anon_daily_limit: int = Field(default=2, ge=1, description="Anonymous user daily limit")
-    signed_in_daily_limit: int = Field(default=10, ge=1, description="Signed-in user daily limit")
+    anon_daily_limit: int = Field(default=10, ge=1, description="Anonymous user daily limit")
+    signed_in_daily_limit: int = Field(default=25, ge=1, description="Signed-in user daily limit")
     premium_daily_limit: int = Field(default=100, ge=1, description="Premium user daily limit")
     
     # Environment
@@ -63,6 +71,11 @@ class Settings(BaseSettings):
     
     # Logging
     log_level: str = Field(default="INFO", description="Logging level")
+    
+    # Clerk Authentication
+    clerk_publishable_key: str = Field(default="", description="Clerk publishable key")
+    clerk_secret_key: str = Field(default="", description="Clerk secret key")
+    clerk_frontend_api: str = Field(default="", description="Clerk frontend API URL")
     
     model_config = {
         "env_file": ".env",
