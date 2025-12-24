@@ -18,10 +18,10 @@ export const Header = () => {
   const [isOpen, setIsOpen] = useState(false)
 
   const menuItems = [
-    { name: "About", href: "#about" },
-    { name: "Listening Space", href: "#listening-space" },
+    { name: "About", href: "/about" },
+    { name: "Listening Space", href: "/listening-space" },
     { name: "Your Mood Map", href: "/mood-map" },
-    { name: "Showing Up", href: "#showing-up" },
+    { name: "Showing Up", href: "/showing-up" },
     { name: "Quiet Connections", href: "#quiet-connections" },
     { name: "Privacy & Control", href: "#privacy-control" },
   ]
@@ -91,7 +91,7 @@ export const Header = () => {
                   </SignedOut>
                   <SignedIn>
                     <div className="flex items-center gap-4">
-                      <UserButton 
+                      <UserButton
                         appearance={{
                           elements: {
                             avatarBox: "w-10 h-10"

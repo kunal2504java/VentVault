@@ -171,12 +171,12 @@ export default function VentPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingDuration, setRecordingDuration] = useState(0)
-  
+
   // Chat continuation state
   const [isChatMode, setIsChatMode] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [chatInput, setChatInput] = useState("")
-  
+
   // Privacy settings state
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
   const [showRateLimitModal, setShowRateLimitModal] = useState(false)
@@ -307,14 +307,14 @@ export default function VentPage() {
 
   const handleAnotherVent = () => {
     console.log("handleAnotherVent called")
-    
+
     // Clear session for fresh start
     try {
       sessionStorage.removeItem("ventvault_session_id")
     } catch (e) {
       console.error("Failed to clear session", e)
     }
-    
+
     // Reset all state
     setVentText("")
     setIsReleased(false)
@@ -325,7 +325,7 @@ export default function VentPage() {
     setIsChatMode(false)
     setMessages([])
     setChatInput("")
-    
+
     console.log("State reset complete, ventMode set to null")
   }
 
@@ -344,17 +344,17 @@ export default function VentPage() {
 
     const userMessage = chatInput.trim()
     setChatInput("")
-    
+
     // Add user message to chat
     setMessages(prev => [...prev, { role: "user", content: userMessage }])
-    
+
     setIsLoading(true)
 
     // Build conversation context for the API
     const conversationContext = messages
       .map(m => `${m.role === "user" ? "User" : "VentVault"}: ${m.content}`)
       .join("\n\n")
-    
+
     const fullContext = `${conversationContext}\n\nUser: ${userMessage}`
 
     // Import API client dynamically
@@ -463,7 +463,7 @@ export default function VentPage() {
         }}
         hideCopyButton={true}
       />
-      
+
       {/* Custom styles to position Leva at bottom right */}
       <style jsx global>{`
         .leva-c-kWgxhW {
@@ -475,13 +475,11 @@ export default function VentPage() {
       `}</style>
 
       <div
-        className={`min-h-screen transition-all duration-300 ${
-          isChatMode ? "ml-16" : ""
-        } ${
-          isDayMode
+        className={`min-h-screen transition-all duration-300 ${isChatMode ? "ml-16" : ""
+          } ${isDayMode
             ? "bg-gradient-to-br from-stone-50 via-stone-100 to-neutral-100"
             : "bg-gradient-to-br from-black via-slate-950 to-neutral-900"
-        }`}
+          }`}
       >
         <GL hovering={false} />
 
@@ -520,11 +518,10 @@ export default function VentPage() {
                 <div className="mb-6">
                   <button
                     onClick={() => setVentMode(null)}
-                    className={`px-4 py-2 font-mono text-sm tracking-wider rounded-full transition-all duration-300 ${
-                      isDayMode
+                    className={`px-4 py-2 font-mono text-sm tracking-wider rounded-full transition-all duration-300 ${isDayMode
                         ? "text-neutral-600 hover:bg-neutral-200/50"
                         : "text-neutral-400 hover:bg-neutral-800/50"
-                    }`}
+                      }`}
                   >
                     ← Back
                   </button>
@@ -541,9 +538,8 @@ export default function VentPage() {
                       delay={2500}
                       loop={true}
                       cursor=""
-                      className={`text-xl md:text-2xl lg:text-3xl font-sentient text-center transition-colors duration-700 ${
-                        isDayMode ? "text-neutral-700" : "text-white"
-                      }`}
+                      className={`text-xl md:text-2xl lg:text-3xl font-sentient text-center transition-colors duration-700 ${isDayMode ? "text-neutral-700" : "text-white"
+                        }`}
                     />
                   </div>
 
@@ -557,9 +553,8 @@ export default function VentPage() {
                     onStop={() => setIsLoading(false)}
                     rows={3}
                     isDayMode={isDayMode}
-                    className={`backdrop-blur-md ${
-                      isDayMode ? "shadow-lg shadow-neutral-200/50" : "shadow-xl shadow-black/30"
-                    }`}
+                    className={`backdrop-blur-md ${isDayMode ? "shadow-lg shadow-neutral-200/50" : "shadow-xl shadow-black/30"
+                      }`}
                   >
                     <ChatInputTextArea placeholder="Type freely. This isn't being judged..." autoFocus />
                     <ChatInputSubmit />
@@ -574,11 +569,10 @@ export default function VentPage() {
                 <div className="w-full mb-8">
                   <button
                     onClick={() => setVentMode(null)}
-                    className={`px-4 py-2 font-mono text-sm tracking-wider rounded-full transition-all duration-300 ${
-                      isDayMode
+                    className={`px-4 py-2 font-mono text-sm tracking-wider rounded-full transition-all duration-300 ${isDayMode
                         ? "text-neutral-600 hover:bg-neutral-200/50"
                         : "text-neutral-400 hover:bg-neutral-800/50"
-                    }`}
+                      }`}
                   >
                     ← Back
                   </button>
@@ -586,20 +580,18 @@ export default function VentPage() {
 
                 {/* Title */}
                 <h2
-                  className={`text-2xl md:text-3xl font-sentient mb-8 text-center transition-colors duration-700 ${
-                    isDayMode ? "text-neutral-800" : "text-stone-100"
-                  }`}
+                  className={`text-2xl md:text-3xl font-sentient mb-8 text-center transition-colors duration-700 ${isDayMode ? "text-neutral-800" : "text-stone-100"
+                    }`}
                 >
                   Speak your mind
                 </h2>
 
                 {/* Voice Input Component */}
                 <div
-                  className={`w-full max-w-md p-8 rounded-3xl backdrop-blur-md transition-all duration-500 ${
-                    isDayMode
+                  className={`w-full max-w-md p-8 rounded-3xl backdrop-blur-md transition-all duration-500 ${isDayMode
                       ? "bg-white/60 shadow-lg shadow-neutral-200/50"
                       : "bg-neutral-900/40 shadow-xl shadow-black/30 border border-neutral-800/50"
-                  }`}
+                    }`}
                 >
                   <AIVoiceInput
                     onStart={handleVoiceStart}
@@ -611,9 +603,8 @@ export default function VentPage() {
 
                 {/* Helper text */}
                 <p
-                  className={`mt-6 text-sm font-mono transition-colors duration-700 ${
-                    isDayMode ? "text-neutral-500" : "text-neutral-500"
-                  }`}
+                  className={`mt-6 text-sm font-mono transition-colors duration-700 ${isDayMode ? "text-neutral-500" : "text-neutral-500"
+                    }`}
                 >
                   {isRecording ? "Recording... click to stop" : "Your voice stays with you"}
                 </p>
@@ -632,9 +623,8 @@ export default function VentPage() {
                       delay={2000}
                       loop={true}
                       cursor=""
-                      className={`text-xl md:text-2xl lg:text-3xl font-sentient transition-colors duration-700 ${
-                        isDayMode ? "text-neutral-600" : "text-stone-300"
-                      }`}
+                      className={`text-xl md:text-2xl lg:text-3xl font-sentient transition-colors duration-700 ${isDayMode ? "text-neutral-600" : "text-stone-300"
+                        }`}
                     />
                   </div>
                 )}
@@ -644,37 +634,47 @@ export default function VentPage() {
                   className={`w-full transition-opacity duration-1000 ${aiResponse ? "opacity-100" : "opacity-0"}`}
                 >
                   <p
-                    className={`text-lg md:text-xl leading-relaxed mb-12 transition-colors duration-700 font-sentient whitespace-pre-wrap ${
-                      isDayMode ? "text-neutral-700" : "text-stone-200"
-                    }`}
+                    className={`text-lg md:text-xl leading-relaxed mb-12 transition-colors duration-700 font-sentient whitespace-pre-wrap ${isDayMode ? "text-neutral-700" : "text-stone-200"
+                      }`}
                   >
                     {aiResponse}
                   </p>
 
                   {!isLoading && aiResponse && (
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                      <button
-                        onClick={handleAnotherVent}
-                        className={`px-8 py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 ${
-                          isDayMode
-                            ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
-                            : "border-neutral-700 text-neutral-300 hover:bg-neutral-900"
-                        }`}
-                      >
-                        Another vent
-                      </button>
+                    <>
+                      <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                        <button
+                          onClick={handleAnotherVent}
+                          className={`px-8 py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 ${isDayMode
+                              ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
+                              : "border-neutral-700 text-neutral-300 hover:bg-neutral-900"
+                            }`}
+                        >
+                          Another vent
+                        </button>
 
-                      <button
-                        onClick={handleContinue}
-                        className={`px-8 py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 ${
-                          isDayMode
-                            ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
-                            : "border-neutral-700 text-neutral-300 hover:bg-neutral-900"
-                        }`}
+                        <button
+                          onClick={handleContinue}
+                          className={`px-8 py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 ${isDayMode
+                              ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
+                              : "border-neutral-700 text-neutral-300 hover:bg-neutral-900"
+                            }`}
+                        >
+                          Continue
+                        </button>
+                      </div>
+
+                      {/* Subtle link to Showing Up page */}
+                      <a
+                        href="/showing-up"
+                        className={`mt-8 text-xs font-mono transition-colors duration-300 ${isDayMode
+                            ? "text-neutral-400 hover:text-neutral-600"
+                            : "text-neutral-600 hover:text-neutral-400"
+                          }`}
                       >
-                        Continue
-                      </button>
-                    </div>
+                        You showed up today ↗
+                      </a>
+                    </>
                   )}
                 </div>
               </div>
@@ -691,15 +691,14 @@ export default function VentPage() {
                       className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[85%] px-5 py-4 rounded-2xl transition-all duration-300 ${
-                          message.role === "user"
+                        className={`max-w-[85%] px-5 py-4 rounded-2xl transition-all duration-300 ${message.role === "user"
                             ? isDayMode
                               ? "bg-neutral-800 text-white"
                               : "bg-neutral-700 text-white"
                             : isDayMode
                               ? "bg-white/80 text-neutral-700 border border-neutral-200"
                               : "bg-neutral-900/60 text-stone-200 border border-neutral-800"
-                        }`}
+                          }`}
                       >
                         <p className="text-sm md:text-base leading-relaxed font-sentient whitespace-pre-wrap">
                           {message.content}
@@ -707,16 +706,15 @@ export default function VentPage() {
                       </div>
                     </div>
                   ))}
-                  
+
                   {/* Loading indicator with calming typewriter */}
                   {isLoading && messages[messages.length - 1]?.role === "user" && (
                     <div className="flex justify-start">
                       <div
-                        className={`px-5 py-4 rounded-2xl ${
-                          isDayMode
+                        className={`px-5 py-4 rounded-2xl ${isDayMode
                             ? "bg-white/80 border border-neutral-200"
                             : "bg-neutral-900/60 border border-neutral-800"
-                        }`}
+                          }`}
                       >
                         <Typewriter
                           text={calmingMessages}
@@ -725,9 +723,8 @@ export default function VentPage() {
                           delay={1500}
                           loop={true}
                           cursor=""
-                          className={`text-sm md:text-base font-sentient ${
-                            isDayMode ? "text-neutral-500" : "text-stone-400"
-                          }`}
+                          className={`text-sm md:text-base font-sentient ${isDayMode ? "text-neutral-500" : "text-stone-400"
+                            }`}
                         />
                       </div>
                     </div>
@@ -746,9 +743,8 @@ export default function VentPage() {
                     onStop={() => setIsLoading(false)}
                     rows={2}
                     isDayMode={isDayMode}
-                    className={`backdrop-blur-md ${
-                      isDayMode ? "shadow-lg shadow-neutral-200/50" : "shadow-xl shadow-black/30"
-                    }`}
+                    className={`backdrop-blur-md ${isDayMode ? "shadow-lg shadow-neutral-200/50" : "shadow-xl shadow-black/30"
+                      }`}
                   >
                     <ChatInputTextArea placeholder="Continue the conversation..." autoFocus />
                     <ChatInputSubmit />
@@ -760,27 +756,25 @@ export default function VentPage() {
 
           <footer className="pb-8">
             <p
-              className={`text-center text-sm font-mono transition-colors duration-700 ${
-                isDayMode ? "text-neutral-400" : "text-neutral-600"
-              }`}
+              className={`text-center text-sm font-mono transition-colors duration-700 ${isDayMode ? "text-neutral-400" : "text-neutral-600"
+                }`}
             >
               Nothing is saved unless you choose.
             </p>
             <button
               onClick={() => setShowPrivacySettings(true)}
-              className={`block mx-auto mt-2 text-xs font-mono transition-colors duration-300 ${
-                isDayMode ? "text-neutral-400 hover:text-neutral-600" : "text-neutral-600 hover:text-neutral-400"
-              }`}
+              className={`block mx-auto mt-2 text-xs font-mono transition-colors duration-300 ${isDayMode ? "text-neutral-400 hover:text-neutral-600" : "text-neutral-600 hover:text-neutral-400"
+                }`}
             >
               Privacy Settings
             </button>
           </footer>
         </div>
       </div>
-      
+
       {/* Consent Banner */}
       <ConsentBanner />
-      
+
       {/* Privacy Settings Modal */}
       <PrivacySettings
         isOpen={showPrivacySettings}

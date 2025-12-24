@@ -21,10 +21,10 @@ export const MobileMenu = ({ className }: MobileMenuProps) => {
   const [isOpen, setIsOpen] = useState(false)
 
   const menuItems = [
-    { name: "About", href: "#about" },
-    { name: "Listening Space", href: "#listening-space" },
+    { name: "About", href: "/about" },
+    { name: "Listening Space", href: "/listening-space" },
     { name: "Your Mood Map", href: "/mood-map" },
-    { name: "Showing Up", href: "#showing-up" },
+    { name: "Showing Up", href: "/showing-up" },
     { name: "Quiet Connections", href: "#quiet-connections" },
     { name: "Privacy & Control", href: "#privacy-control" },
   ]
@@ -75,7 +75,7 @@ export const MobileMenu = ({ className }: MobileMenuProps) => {
               <SignedOut>
                 <div className="flex flex-col space-y-3">
                   <SignInButton mode="modal">
-                    <button 
+                    <button
                       onClick={handleLinkClick}
                       className="text-base font-mono uppercase transition-colors ease-out duration-150 hover:opacity-80 py-1 text-left"
                       style={{ color: "#FFC700" }}
@@ -84,7 +84,7 @@ export const MobileMenu = ({ className }: MobileMenuProps) => {
                     </button>
                   </SignInButton>
                   <SignUpButton mode="modal">
-                    <button 
+                    <button
                       onClick={handleLinkClick}
                       className="text-sm font-mono uppercase text-foreground/60 transition-colors ease-out duration-150 hover:text-foreground/100 py-1 text-left"
                     >
@@ -95,7 +95,7 @@ export const MobileMenu = ({ className }: MobileMenuProps) => {
               </SignedOut>
               <SignedIn>
                 <div className="flex items-center gap-4">
-                  <UserButton 
+                  <UserButton
                     appearance={{
                       elements: {
                         avatarBox: "w-10 h-10"

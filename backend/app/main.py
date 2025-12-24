@@ -540,6 +540,87 @@ async def get_aggregate_analytics(
 
 
 # ============================================
+# Presence Endpoints (Showing Up page)
+# ============================================
+
+@app.get("/api/presence")
+async def get_presence_data(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get user presence data for the Showing Up page.
+    Returns patterns only, not raw content or timestamps.
+    Privacy-first: Only returns check-in dates as boolean patterns.
+    """
+    from datetime import datetime, timezone, timedelta
+    from sqlalchemy import select, func, extract
+    from app.db_models import VentSession, VentAnalytics
+    
+    ip, user_agent = get_client_info(request)
+    
+    anonymous_user = await state.analytics_service.get_or_create_anonymous_user(
+        db, ip, user_agent
+    )
+    
+    # Get sessions from the last 30 days
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    
+    result = await db.execute(
+        select(func.date(VentSession.started_at))
+        .where(
+            VentSession.anonymous_user_id == anonymous_user.id,
+            VentSession.started_at >= thirty_days_ago
+        )
+        .distinct()
+    )
+    
+    check_in_dates = [row[0] for row in result.fetchall()]
+    days_showed_up = len(check_in_dates)
+    
+    # Create check-in pattern for last 30 days (boolean array)
+    today = datetime.now(timezone.utc).date()
+    check_in_pattern = []
+    for i in range(30):
+        date = today - timedelta(days=29-i)
+        check_in_pattern.append(date in check_in_dates)
+    
+    # Get average hour of check-ins for insight
+    hour_result = await db.execute(
+        select(func.avg(extract('hour', VentSession.started_at)))
+        .where(VentSession.anonymous_user_id == anonymous_user.id)
+    )
+    avg_hour = hour_result.scalar()
+    
+    # Determine time-based insight
+    if avg_hour is not None:
+        if avg_hour >= 22 or avg_hour < 5:
+            time_insight = "You tend to check in more during quieter hours."
+        elif avg_hour >= 5 and avg_hour < 12:
+            time_insight = "Mornings seem to be your time for reflection."
+        elif avg_hour >= 12 and avg_hour < 17:
+            time_insight = "Afternoon pauses are part of your rhythm."
+        else:
+            time_insight = "Evenings bring you here."
+    else:
+        time_insight = None
+    
+    # Check for gaps in activity
+    has_gaps = days_showed_up > 0 and days_showed_up < len([d for d in check_in_pattern if d])
+    gap_insight = "You came back even after long gaps — that counts." if has_gaps else None
+    
+    return {
+        "days_showed_up": days_showed_up,
+        "check_in_pattern": check_in_pattern,
+        "insights": {
+            "time_based": time_insight,
+            "gap_based": gap_insight,
+        },
+        "message": "This page is built from patterns, not stored content."
+    }
+
+
+# ============================================
 # Data Privacy Endpoints (GDPR/CCPA)
 # ============================================
 

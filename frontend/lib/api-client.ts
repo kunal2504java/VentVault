@@ -68,13 +68,13 @@ export async function streamVent(
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     }
-    
+
     // Include session ID if we have one (for conversation continuity)
     const existingSessionId = getStoredSessionId()
     if (existingSessionId) {
       headers["X-Session-ID"] = existingSessionId
     }
-    
+
     // Include auth token if user is signed in
     if (getAuthToken) {
       const token = await getAuthToken()
@@ -82,7 +82,7 @@ export async function streamVent(
         headers["Authorization"] = `Bearer ${token}`
       }
     }
-    
+
     const response = await fetch(`${API_BASE_URL}/api/vent`, {
       method: "POST",
       headers,
@@ -101,7 +101,7 @@ export async function streamVent(
     const sessionId = response.headers.get("X-Session-ID") || ""
     const userId = response.headers.get("X-User-ID") || ""
     const remainingVents = parseInt(response.headers.get("X-Remaining-Vents") || "0")
-    
+
     // Store IDs for future requests
     if (sessionId) storeSessionId(sessionId)
     if (userId) storeUserId(userId)
@@ -170,5 +170,37 @@ export async function checkHealth(): Promise<boolean> {
     return data.status === "healthy" || data.status === "degraded"
   } catch {
     return false
+  }
+}
+
+/**
+ * Presence data for Showing Up page
+ */
+export interface PresenceData {
+  days_showed_up: number
+  check_in_pattern: boolean[]
+  insights: {
+    time_based: string | null
+    gap_based: string | null
+  }
+  message: string
+}
+
+/**
+ * Get presence data for the Showing Up page
+ */
+export async function getPresenceData(): Promise<PresenceData | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/presence`, {
+      credentials: "include",
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    return await response.json()
+  } catch {
+    return null
   }
 }
