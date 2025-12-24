@@ -17,6 +17,41 @@ interface PrivacySettingsProps {
   isDayMode?: boolean
 }
 
+// Custom Toggle Switch Component
+function Toggle({ 
+  checked, 
+  onChange, 
+  isDayMode 
+}: { 
+  checked: boolean
+  onChange: (checked: boolean) => void
+  isDayMode: boolean 
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC700]/50 ${
+        checked 
+          ? "bg-[#FFC700]" 
+          : isDayMode 
+            ? "bg-neutral-300" 
+            : "bg-neutral-700"
+      }`}
+    >
+      <span
+        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full shadow-lg ring-0 transition duration-200 ease-in-out ${
+          checked ? "translate-x-5" : "translate-x-0"
+        } ${
+          isDayMode ? "bg-white" : "bg-neutral-200"
+        }`}
+      />
+    </button>
+  )
+}
+
 export function PrivacySettings({ isOpen, onClose, isDayMode = false }: PrivacySettingsProps) {
   const [consents, setConsents] = useState<Partial<ConsentStatus>>({
     analytics: false,
@@ -57,10 +92,11 @@ export function PrivacySettings({ isOpen, onClose, isDayMode = false }: PrivacyS
     try {
       await updateConsents(consents)
       setLocalConsent(consents)
-      setMessage({ type: "success", text: "Settings saved successfully" })
+      setMessage({ type: "success", text: "Preferences saved" })
+      setTimeout(() => setMessage(null), 2000)
     } catch (error) {
       setLocalConsent(consents)
-      setMessage({ type: "error", text: "Saved locally. Will sync when online." })
+      setMessage({ type: "error", text: "Saved locally" })
     } finally {
       setIsSaving(false)
     }
@@ -76,9 +112,10 @@ export function PrivacySettings({ isOpen, onClose, isDayMode = false }: PrivacyS
       a.download = `ventvault-data-${new Date().toISOString().split("T")[0]}.json`
       a.click()
       URL.revokeObjectURL(url)
-      setMessage({ type: "success", text: "Data exported successfully" })
+      setMessage({ type: "success", text: "Data exported" })
+      setTimeout(() => setMessage(null), 2000)
     } catch (error) {
-      setMessage({ type: "error", text: "Failed to export data" })
+      setMessage({ type: "error", text: "Export failed" })
     }
   }
 
@@ -92,7 +129,7 @@ export function PrivacySettings({ isOpen, onClose, isDayMode = false }: PrivacyS
         window.location.reload()
       }, 1500)
     } catch (error) {
-      setMessage({ type: "error", text: "Failed to delete data" })
+      setMessage({ type: "error", text: "Delete failed" })
     }
   }
 
@@ -102,36 +139,34 @@ export function PrivacySettings({ isOpen, onClose, isDayMode = false }: PrivacyS
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/70 backdrop-blur-md"
         onClick={onClose}
       />
 
       {/* Modal */}
       <div
-        className={`relative w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden ${
-          isDayMode ? "bg-white" : "bg-neutral-900"
+        className={`relative w-full max-w-md rounded-3xl overflow-hidden transition-all duration-300 ${
+          isDayMode 
+            ? "bg-white/95 shadow-2xl" 
+            : "bg-neutral-900/95 border border-neutral-800/50 shadow-2xl shadow-black/50"
         }`}
       >
         {/* Header */}
-        <div
-          className={`px-6 py-4 border-b ${
-            isDayMode ? "border-neutral-200" : "border-neutral-800"
-          }`}
-        >
+        <div className="px-6 pt-6 pb-4">
           <div className="flex items-center justify-between">
             <h2
-              className={`text-xl font-semibold ${
-                isDayMode ? "text-neutral-900" : "text-white"
+              className={`text-2xl font-sentient ${
+                isDayMode ? "text-neutral-800" : "text-white"
               }`}
             >
-              Privacy Settings
+              Privacy
             </h2>
             <button
               onClick={onClose}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`p-2 -mr-2 rounded-full transition-all duration-200 ${
                 isDayMode
-                  ? "hover:bg-neutral-100 text-neutral-500"
-                  : "hover:bg-neutral-800 text-neutral-400"
+                  ? "hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600"
+                  : "hover:bg-neutral-800 text-neutral-500 hover:text-neutral-300"
               }`}
             >
               <svg
@@ -143,7 +178,7 @@ export function PrivacySettings({ isOpen, onClose, isDayMode = false }: PrivacyS
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeWidth={2}
+                  strokeWidth={1.5}
                   d="M6 18L18 6M6 6l12 12"
                 />
               </svg>
@@ -152,143 +187,143 @@ export function PrivacySettings({ isOpen, onClose, isDayMode = false }: PrivacyS
         </div>
 
         {/* Content */}
-        <div className="px-6 py-5 max-h-[60vh] overflow-y-auto custom-scrollbar">
+        <div className="px-6 pb-6 max-h-[70vh] overflow-y-auto">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="w-8 h-8 border-2 border-[#FFC700] border-t-transparent rounded-full animate-spin" />
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-[#FFC700] border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             <div className="space-y-6">
               {/* Consent toggles */}
               <div className="space-y-4">
-                <h3
-                  className={`text-sm font-medium ${
-                    isDayMode ? "text-neutral-700" : "text-neutral-300"
+                {/* Analytics Toggle */}
+                <div 
+                  className={`flex items-center justify-between p-4 rounded-2xl transition-colors ${
+                    isDayMode ? "bg-neutral-50" : "bg-neutral-800/40"
                   }`}
                 >
-                  Data Collection
-                </h3>
-
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={consents.analytics}
-                    onChange={(e) =>
-                      setConsents({ ...consents, analytics: e.target.checked })
-                    }
-                    className="mt-1 w-4 h-4 rounded border-neutral-600 bg-neutral-700 text-[#FFC700] focus:ring-[#FFC700]"
-                  />
-                  <div>
+                  <div className="flex-1 pr-4">
                     <span
-                      className={`text-sm font-medium ${
+                      className={`text-sm font-medium font-sentient ${
                         isDayMode ? "text-neutral-800" : "text-white"
                       }`}
                     >
                       Anonymous Analytics
                     </span>
                     <p
-                      className={`text-xs mt-0.5 ${
+                      className={`text-xs mt-1 font-mono ${
                         isDayMode ? "text-neutral-500" : "text-neutral-500"
                       }`}
                     >
-                      Help improve VentVault with anonymous usage data
+                      Help improve VentVault
                     </p>
                   </div>
-                </label>
-
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={consents.location}
-                    onChange={(e) =>
-                      setConsents({ ...consents, location: e.target.checked })
-                    }
-                    className="mt-1 w-4 h-4 rounded border-neutral-600 bg-neutral-700 text-[#FFC700] focus:ring-[#FFC700]"
+                  <Toggle
+                    checked={consents.analytics || false}
+                    onChange={(checked) => setConsents({ ...consents, analytics: checked })}
+                    isDayMode={isDayMode}
                   />
-                  <div>
+                </div>
+
+                {/* Location Toggle */}
+                <div 
+                  className={`flex items-center justify-between p-4 rounded-2xl transition-colors ${
+                    isDayMode ? "bg-neutral-50" : "bg-neutral-800/40"
+                  }`}
+                >
+                  <div className="flex-1 pr-4">
                     <span
-                      className={`text-sm font-medium ${
+                      className={`text-sm font-medium font-sentient ${
                         isDayMode ? "text-neutral-800" : "text-white"
                       }`}
                     >
-                      Location (City-level)
+                      Location
                     </span>
                     <p
-                      className={`text-xs mt-0.5 ${
+                      className={`text-xs mt-1 font-mono ${
                         isDayMode ? "text-neutral-500" : "text-neutral-500"
                       }`}
                     >
-                      Enable local crisis resources and timezone features
+                      Local crisis resources
                     </p>
                   </div>
-                </label>
+                  <Toggle
+                    checked={consents.location || false}
+                    onChange={(checked) => setConsents({ ...consents, location: checked })}
+                    isDayMode={isDayMode}
+                  />
+                </div>
               </div>
 
-              {/* Info box */}
-              <div
-                className={`p-4 rounded-xl ${
-                  isDayMode ? "bg-amber-50" : "bg-neutral-800/50"
+              {/* Privacy note */}
+              <p
+                className={`text-xs font-mono text-center px-4 ${
+                  isDayMode ? "text-neutral-400" : "text-neutral-600"
                 }`}
               >
-                <p
-                  className={`text-xs ${
-                    isDayMode ? "text-amber-800" : "text-neutral-400"
-                  }`}
-                >
-                  🔒 <strong>Your privacy is protected:</strong> VentVault never stores the content of your vents. Only anonymous analytics are collected to improve the service.
-                </p>
-              </div>
+                Your vents are never stored. Only anonymous patterns are collected.
+              </p>
 
               {/* Save button */}
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="w-full px-4 py-2.5 bg-[#FFC700] hover:bg-[#e6b300] disabled:opacity-50 text-black font-medium rounded-lg transition-colors"
+                className={`w-full py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 ${
+                  isDayMode
+                    ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+                    : "border-neutral-700 text-neutral-300 hover:bg-neutral-800 disabled:opacity-50"
+                }`}
               >
-                {isSaving ? "Saving..." : "Save Preferences"}
+                {isSaving ? "Saving..." : "Save preferences"}
               </button>
 
               {/* Message */}
               {message && (
                 <p
-                  className={`text-sm text-center ${
-                    message.type === "success" ? "text-green-500" : "text-red-500"
+                  className={`text-xs font-mono text-center transition-opacity duration-300 ${
+                    message.type === "success" 
+                      ? isDayMode ? "text-green-600" : "text-green-400"
+                      : isDayMode ? "text-red-600" : "text-red-400"
                   }`}
                 >
                   {message.text}
                 </p>
               )}
 
-              {/* Data management */}
+              {/* Data management section */}
               <div
                 className={`pt-4 border-t ${
                   isDayMode ? "border-neutral-200" : "border-neutral-800"
                 }`}
               >
-                <h3
-                  className={`text-sm font-medium mb-3 ${
-                    isDayMode ? "text-neutral-700" : "text-neutral-300"
+                <p
+                  className={`text-xs font-mono mb-4 ${
+                    isDayMode ? "text-neutral-500" : "text-neutral-500"
                   }`}
                 >
-                  Your Data
-                </h3>
+                  Your data
+                </p>
 
                 <div className="flex gap-3">
                   <button
                     onClick={handleExport}
-                    className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    className={`flex-1 py-2.5 text-xs font-mono tracking-wider rounded-full border transition-all duration-300 ${
                       isDayMode
-                        ? "bg-neutral-100 hover:bg-neutral-200 text-neutral-700"
-                        : "bg-neutral-800 hover:bg-neutral-700 text-white"
+                        ? "border-neutral-300 text-neutral-600 hover:bg-neutral-100"
+                        : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
                     }`}
                   >
-                    Export Data
+                    Export
                   </button>
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
-                    className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-colors"
+                    className={`flex-1 py-2.5 text-xs font-mono tracking-wider rounded-full border transition-all duration-300 ${
+                      isDayMode
+                        ? "border-red-200 text-red-500 hover:bg-red-50"
+                        : "border-red-900/50 text-red-400 hover:bg-red-900/20"
+                    }`}
                   >
-                    Delete All Data
+                    Delete all
                   </button>
                 </div>
               </div>
@@ -296,27 +331,27 @@ export function PrivacySettings({ isOpen, onClose, isDayMode = false }: PrivacyS
               {/* Delete confirmation */}
               {showDeleteConfirm && (
                 <div
-                  className={`p-4 rounded-xl ${
+                  className={`p-4 rounded-2xl ${
                     isDayMode ? "bg-red-50" : "bg-red-900/20"
                   }`}
                 >
                   <p
-                    className={`text-sm mb-3 ${
-                      isDayMode ? "text-red-800" : "text-red-300"
+                    className={`text-xs font-mono mb-4 ${
+                      isDayMode ? "text-red-700" : "text-red-300"
                     }`}
                   >
-                    Are you sure? This will permanently delete all your data and cannot be undone.
+                    This cannot be undone.
                   </p>
                   <div className="flex gap-3">
                     <button
                       onClick={handleDelete}
-                      className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"
+                      className="flex-1 py-2.5 text-xs font-mono tracking-wider rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors"
                     >
-                      Yes, Delete Everything
+                      Delete everything
                     </button>
                     <button
                       onClick={() => setShowDeleteConfirm(false)}
-                      className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      className={`flex-1 py-2.5 text-xs font-mono tracking-wider rounded-full transition-colors ${
                         isDayMode
                           ? "bg-neutral-200 hover:bg-neutral-300 text-neutral-700"
                           : "bg-neutral-700 hover:bg-neutral-600 text-white"
