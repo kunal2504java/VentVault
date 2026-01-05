@@ -204,3 +204,77 @@ export async function getPresenceData(): Promise<PresenceData | null> {
     return null
   }
 }
+
+/**
+ * Get AssemblyAI token for real-time voice transcription
+ */
+export async function getAssemblyToken(): Promise<string | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/assembly/token`, {
+      credentials: "include",
+    })
+
+    if (!response.ok) {
+      console.log("AssemblyAI token not available:", response.status)
+      return null
+    }
+
+    const data = await response.json()
+    return data.token || null
+  } catch (error) {
+    console.log("Failed to get AssemblyAI token:", error)
+    return null
+  }
+}
+
+/**
+ * Mood map emotion data
+ */
+export interface EmotionData {
+  emotion: string
+  percentage: number
+}
+
+/**
+ * Mood map data for emotional state visualization
+ */
+export interface MoodMapData {
+  has_data: boolean
+  emotional_load: EmotionData[]
+  processing: EmotionData[]
+  release: EmotionData[]
+  positive_shifts: EmotionData[]
+  conditional: EmotionData[]
+  time_data: {
+    most_active_day: string
+    most_active_time: string
+    time_of_day_label: string
+  } | null
+  insight: {
+    type: string
+    description: string
+  }
+  most_felt_emotion: {
+    emotion: string
+    percentage: number
+  } | null
+}
+
+/**
+ * Get mood map data for the Mood Map page
+ */
+export async function getMoodMapData(): Promise<MoodMapData | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/mood-map`, {
+      credentials: "include",
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    return await response.json()
+  } catch {
+    return null
+  }
+}

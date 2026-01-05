@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     clerk_secret_key: str = Field(default="", description="Clerk secret key")
     clerk_frontend_api: str = Field(default="", description="Clerk frontend API URL")
     
+    # Voice Transcription (AssemblyAI)
+    assemblyai_api_key: str = Field(default="", description="AssemblyAI API key for voice transcription")
+    
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

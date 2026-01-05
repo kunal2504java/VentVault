@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { Header } from "@/components/header";
 import { ClerkProvider } from "@clerk/nextjs";
+import { ParticleProvider } from "@/lib/particle-context";
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -28,10 +29,13 @@ export default function RootLayout({
           className={`${geistMono.variable} antialiased`}
           suppressHydrationWarning
         >
-          <Header />
-          {children}
+          <ParticleProvider>
+            <Header />
+            {children}
+          </ParticleProvider>
         </body>
       </html>
     </ClerkProvider>
   );
 }
+

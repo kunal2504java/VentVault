@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react"
 import { GL } from "@/components/gl"
-import { Leva } from "leva"
 import { DotFlow, type DotFlowProps } from "@/components/ui/dot-flow"
 import { ChatInput, ChatInputTextArea, ChatInputSubmit } from "@/components/ui/chat-input"
 import { AIVoiceInput } from "@/components/ui/ai-voice-input"
@@ -167,10 +166,13 @@ export default function VentPage() {
   const [ventText, setVentText] = useState("")
   const [isReleased, setIsReleased] = useState(false)
   const [aiResponse, setAiResponse] = useState("")
-  const [isDayMode, setIsDayMode] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingDuration, setRecordingDuration] = useState(0)
+  const [voiceTranscript, setVoiceTranscript] = useState("")
+
+  // Always use dark mode
+  const isDayMode = false
 
   // Chat continuation state
   const [isChatMode, setIsChatMode] = useState(false)
@@ -202,18 +204,6 @@ export default function VentPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
-
-  useEffect(() => {
-    const checkTime = () => {
-      const hour = new Date().getHours()
-      setIsDayMode(hour >= 6 && hour < 19)
-    }
-
-    checkTime()
-    const interval = setInterval(checkTime, 60000)
-
-    return () => clearInterval(interval)
-  }, [])
 
   const handleRelease = async () => {
     if (!ventText.trim()) return
@@ -257,52 +247,63 @@ export default function VentPage() {
 
   const handleVoiceStart = () => {
     setIsRecording(true)
+    setVoiceTranscript("")
   }
 
-  const handleVoiceStop = async (duration: number) => {
+  const handleVoiceStop = (duration: number) => {
     setIsRecording(false)
     setRecordingDuration(duration)
+    // The actual transcript will be sent via handleVoiceTranscript
+  }
 
-    if (duration > 0) {
-      setIsLoading(true)
-      setIsReleased(true)
-      setAiResponse("")
-
-      // Import API client dynamically
-      const { streamVent } = await import("@/lib/api-client")
-
-      // For voice, we'll send a placeholder until we implement actual transcription
-      const voiceContent = `[Voice vent recorded for ${duration.toFixed(1)} seconds]`
-
-      // Stream response from backend
-      await streamVent(
-        {
-          mode: "voice",
-          content: voiceContent,
-        },
-        // On each token
-        (token) => {
-          setAiResponse((prev) => prev + token)
-        },
-        // On complete
-        (metadata) => {
-          setIsLoading(false)
-          console.log("Session ID:", metadata.sessionId)
-          console.log("Remaining vents:", metadata.remainingVents)
-        },
-        // On error
-        (error) => {
-          setIsLoading(false)
-          // Check if it's a rate limit error
-          if (error.includes("Daily vent limit") || error.includes("limit reached")) {
-            setIsReleased(false)
-            setShowRateLimitModal(true)
-          } else {
-            setAiResponse(`Sorry, something went wrong: ${error}`)
-          }
-        },
-      )
+  const handleVoiceTranscript = async (transcript: string) => {
+    if (!transcript.trim()) {
+      // No transcript captured
+      return
     }
+
+    setVoiceTranscript(transcript)
+    setVentText(transcript) // Store in ventText for chat continuation
+    setIsLoading(true)
+    setIsReleased(true)
+    setAiResponse("")
+
+    // Import API client dynamically
+    const { streamVent } = await import("@/lib/api-client")
+
+    // Stream response from backend with actual transcript
+    await streamVent(
+      {
+        mode: "voice",
+        content: transcript,
+      },
+      // On each token
+      (token) => {
+        setAiResponse((prev) => prev + token)
+      },
+      // On complete
+      (metadata) => {
+        setIsLoading(false)
+        console.log("Session ID:", metadata.sessionId)
+        console.log("Remaining vents:", metadata.remainingVents)
+      },
+      // On error
+      (error) => {
+        setIsLoading(false)
+        // Check if it's a rate limit error
+        if (error.includes("Daily vent limit") || error.includes("limit reached")) {
+          setIsReleased(false)
+          setShowRateLimitModal(true)
+        } else {
+          setAiResponse(`Sorry, something went wrong: ${error}`)
+        }
+      },
+    )
+  }
+
+  const handleVoiceError = (error: string) => {
+    console.error("Voice input error:", error)
+    // Could show a toast notification here
   }
 
   const handleAnotherVent = () => {
@@ -404,75 +405,6 @@ export default function VentPage() {
   return (
     <>
       <BackendStatus />
-      <Leva
-        collapsed={true}
-        oneLineLabels={true}
-        flat={true}
-        theme={{
-          sizes: {
-            rootWidth: "280px",
-            controlWidth: "120px",
-            scrubberWidth: "8px",
-            scrubberHeight: "14px",
-            rowHeight: "24px",
-            folderTitleHeight: "24px",
-            checkboxSize: "14px",
-            joystickWidth: "80px",
-            joystickHeight: "80px",
-            colorPickerWidth: "140px",
-            colorPickerHeight: "100px",
-            monitorHeight: "40px",
-            titleBarHeight: "36px",
-          },
-          radii: {
-            xs: "4px",
-            sm: "6px",
-            lg: "16px",
-          },
-          space: {
-            xs: "4px",
-            sm: "6px",
-            md: "8px",
-            rowGap: "4px",
-            colGap: "4px",
-          },
-          fontSizes: {
-            root: "11px",
-            toolTip: "10px",
-          },
-          colors: {
-            elevation1: "#1a1a1a",
-            elevation2: "#222222",
-            elevation3: "#2a2a2a",
-            accent1: "#FFC700",
-            accent2: "#e6b300",
-            accent3: "#ccaa00",
-            highlight1: "#333333",
-            highlight2: "#444444",
-            highlight3: "#555555",
-            vivid1: "#FFC700",
-            folderWidgetColor: "#FFC700",
-            folderTextColor: "#e5e5e5",
-            toolTipBackground: "#1a1a1a",
-            toolTipText: "#e5e5e5",
-          },
-        }}
-        titleBar={{
-          position: { x: 0, y: 0 },
-          title: "Change Appearance",
-        }}
-        hideCopyButton={true}
-      />
-
-      {/* Custom styles to position Leva at bottom right */}
-      <style jsx global>{`
-        .leva-c-kWgxhW {
-          top: auto !important;
-          bottom: 20px !important;
-          right: 20px !important;
-          left: auto !important;
-        }
-      `}</style>
 
       <div
         className={`min-h-screen transition-all duration-300 ${isChatMode ? "ml-16" : ""
@@ -519,8 +451,8 @@ export default function VentPage() {
                   <button
                     onClick={() => setVentMode(null)}
                     className={`px-4 py-2 font-mono text-sm tracking-wider rounded-full transition-all duration-300 ${isDayMode
-                        ? "text-neutral-600 hover:bg-neutral-200/50"
-                        : "text-neutral-400 hover:bg-neutral-800/50"
+                      ? "text-neutral-600 hover:bg-neutral-200/50"
+                      : "text-neutral-400 hover:bg-neutral-800/50"
                       }`}
                   >
                     ← Back
@@ -570,8 +502,8 @@ export default function VentPage() {
                   <button
                     onClick={() => setVentMode(null)}
                     className={`px-4 py-2 font-mono text-sm tracking-wider rounded-full transition-all duration-300 ${isDayMode
-                        ? "text-neutral-600 hover:bg-neutral-200/50"
-                        : "text-neutral-400 hover:bg-neutral-800/50"
+                      ? "text-neutral-600 hover:bg-neutral-200/50"
+                      : "text-neutral-400 hover:bg-neutral-800/50"
                       }`}
                   >
                     ← Back
@@ -589,13 +521,15 @@ export default function VentPage() {
                 {/* Voice Input Component */}
                 <div
                   className={`w-full max-w-md p-8 rounded-3xl backdrop-blur-md transition-all duration-500 ${isDayMode
-                      ? "bg-white/60 shadow-lg shadow-neutral-200/50"
-                      : "bg-neutral-900/40 shadow-xl shadow-black/30 border border-neutral-800/50"
+                    ? "bg-white/60 shadow-lg shadow-neutral-200/50"
+                    : "bg-neutral-900/40 shadow-xl shadow-black/30 border border-neutral-800/50"
                     }`}
                 >
                   <AIVoiceInput
                     onStart={handleVoiceStart}
                     onStop={handleVoiceStop}
+                    onTranscript={handleVoiceTranscript}
+                    onError={handleVoiceError}
                     visualizerBars={48}
                     isDayMode={isDayMode}
                   />
@@ -646,8 +580,8 @@ export default function VentPage() {
                         <button
                           onClick={handleAnotherVent}
                           className={`px-8 py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 ${isDayMode
-                              ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
-                              : "border-neutral-700 text-neutral-300 hover:bg-neutral-900"
+                            ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
+                            : "border-neutral-700 text-neutral-300 hover:bg-neutral-900"
                             }`}
                         >
                           Another vent
@@ -656,8 +590,8 @@ export default function VentPage() {
                         <button
                           onClick={handleContinue}
                           className={`px-8 py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 ${isDayMode
-                              ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
-                              : "border-neutral-700 text-neutral-300 hover:bg-neutral-900"
+                            ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
+                            : "border-neutral-700 text-neutral-300 hover:bg-neutral-900"
                             }`}
                         >
                           Continue
@@ -668,8 +602,8 @@ export default function VentPage() {
                       <a
                         href="/showing-up"
                         className={`mt-8 text-xs font-mono transition-colors duration-300 ${isDayMode
-                            ? "text-neutral-400 hover:text-neutral-600"
-                            : "text-neutral-600 hover:text-neutral-400"
+                          ? "text-neutral-400 hover:text-neutral-600"
+                          : "text-neutral-600 hover:text-neutral-400"
                           }`}
                       >
                         You showed up today ↗
@@ -692,12 +626,12 @@ export default function VentPage() {
                     >
                       <div
                         className={`max-w-[85%] px-5 py-4 rounded-2xl transition-all duration-300 ${message.role === "user"
-                            ? isDayMode
-                              ? "bg-neutral-800 text-white"
-                              : "bg-neutral-700 text-white"
-                            : isDayMode
-                              ? "bg-white/80 text-neutral-700 border border-neutral-200"
-                              : "bg-neutral-900/60 text-stone-200 border border-neutral-800"
+                          ? isDayMode
+                            ? "bg-neutral-800 text-white"
+                            : "bg-neutral-700 text-white"
+                          : isDayMode
+                            ? "bg-white/80 text-neutral-700 border border-neutral-200"
+                            : "bg-neutral-900/60 text-stone-200 border border-neutral-800"
                           }`}
                       >
                         <p className="text-sm md:text-base leading-relaxed font-sentient whitespace-pre-wrap">
@@ -712,8 +646,8 @@ export default function VentPage() {
                     <div className="flex justify-start">
                       <div
                         className={`px-5 py-4 rounded-2xl ${isDayMode
-                            ? "bg-white/80 border border-neutral-200"
-                            : "bg-neutral-900/60 border border-neutral-800"
+                          ? "bg-white/80 border border-neutral-200"
+                          : "bg-neutral-900/60 border border-neutral-800"
                           }`}
                       >
                         <Typewriter

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { GL } from "@/components/gl"
 import Link from "next/link"
 import { getPresenceData, type PresenceData } from "@/lib/api-client"
+import { useParticleSettings, APP_DEFAULTS } from "@/lib/particle-context"
 
 // Default insights used as fallback
 const gentleInsights = [
@@ -31,7 +32,7 @@ const headerSubtexts = [
 ]
 
 export default function ShowingUpPage() {
-    const [isDayMode, setIsDayMode] = useState(false)
+    const { updateSettings } = useParticleSettings()
     const [currentInsight, setCurrentInsight] = useState(0)
     const [currentReminder, setCurrentReminder] = useState(0)
     const [headerSubtext] = useState(() =>
@@ -64,15 +65,10 @@ export default function ShowingUpPage() {
         fetchData()
     }, [])
 
+    // Apply reduced particle settings for this page
     useEffect(() => {
-        const checkTime = () => {
-            const hour = new Date().getHours()
-            setIsDayMode(hour >= 6 && hour < 19)
-        }
-        checkTime()
-        const interval = setInterval(checkTime, 60000)
-        return () => clearInterval(interval)
-    }, [])
+        updateSettings(APP_DEFAULTS)
+    }, [updateSettings])
 
     // Rotate insights slowly
     useEffect(() => {
@@ -92,10 +88,7 @@ export default function ShowingUpPage() {
 
     return (
         <div
-            className={`min-h-screen transition-all duration-700 ${isDayMode
-                ? "bg-gradient-to-br from-stone-50 via-amber-50/30 to-neutral-100"
-                : "bg-gradient-to-br from-neutral-950 via-neutral-900 to-stone-950"
-                }`}
+            className="min-h-screen transition-all duration-700 bg-gradient-to-br from-black via-neutral-900/80 to-amber-950/20"
         >
             <GL hovering={false} />
 
@@ -111,49 +104,31 @@ export default function ShowingUpPage() {
                         >
                             Showing Up
                         </h1>
-                        <p
-                            className={`text-sm md:text-base font-mono transition-colors duration-700 ${isDayMode ? "text-neutral-500" : "text-neutral-500"
-                                }`}
-                        >
+                        <p className="text-sm md:text-base font-mono transition-colors duration-700 text-neutral-400">
                             {headerSubtext}
                         </p>
                     </header>
 
                     {/* 2. Primary Presence Summary */}
                     <section className="text-center mb-20">
-                        <p
-                            className={`text-3xl md:text-4xl lg:text-5xl font-sentient mb-6 transition-colors duration-700 ${isDayMode ? "text-neutral-700" : "text-stone-200"
-                                }`}
-                        >
+                        <p className="text-3xl md:text-4xl lg:text-5xl font-sentient mb-6 transition-colors duration-700 text-stone-200">
                             You showed up on{" "}
-                            <span
-                                className={`${isDayMode ? "text-neutral-900" : "text-white"
-                                    }`}
-                            >
+                            <span className="text-white">
                                 {daysShowedUp}
                             </span>{" "}
                             days
                         </p>
-                        <p
-                            className={`text-base md:text-lg font-sentient transition-colors duration-700 ${isDayMode ? "text-neutral-500" : "text-neutral-400"
-                                }`}
-                        >
+                        <p className="text-base md:text-lg font-sentient transition-colors duration-700 text-neutral-400">
                             That's {daysShowedUp} moments you chose to let something out.
                         </p>
                     </section>
 
                     {/* 3. Gentle Timeline */}
                     <section className="w-full mb-20">
-                        <h2
-                            className={`text-sm font-mono mb-2 transition-colors duration-700 ${isDayMode ? "text-neutral-600" : "text-neutral-300"
-                                }`}
-                        >
+                        <h2 className="text-xs font-mono uppercase tracking-widest mb-4 transition-colors duration-700 text-neutral-400">
                             Moments You Checked In
                         </h2>
-                        <p
-                            className={`text-xs font-mono mb-6 transition-colors duration-700 ${isDayMode ? "text-neutral-500" : "text-neutral-400"
-                                }`}
-                        >
+                        <p className="text-xs font-mono mb-6 transition-colors duration-700 text-neutral-400">
                             These are days you took a pause — nothing more, nothing less.
                         </p>
 
@@ -163,12 +138,8 @@ export default function ShowingUpPage() {
                                 <div
                                     key={index}
                                     className={`w-3 h-3 rounded-full transition-all duration-500 ${active
-                                        ? isDayMode
-                                            ? "bg-neutral-400"
-                                            : "bg-neutral-500"
-                                        : isDayMode
-                                            ? "bg-neutral-200"
-                                            : "bg-neutral-800"
+                                        ? "bg-neutral-500"
+                                        : "bg-neutral-800"
                                         }`}
                                 />
                             ))}
@@ -176,38 +147,21 @@ export default function ShowingUpPage() {
                     </section>
 
                     {/* 4. Soft Reflection Section */}
-                    <section
-                        className={`w-full p-6 rounded-2xl mb-16 transition-all duration-700 ${isDayMode
-                            ? "bg-white/60 border border-neutral-200"
-                            : "bg-neutral-900/40 border border-neutral-800"
-                            }`}
-                    >
-                        <h3
-                            className={`text-xs font-mono mb-4 transition-colors duration-700 ${isDayMode ? "text-neutral-600" : "text-amber-200/70"
-                                }`}
-                        >
+                    <section className="w-full p-6 rounded-2xl mb-16 transition-all duration-700 bg-neutral-900/40 border border-neutral-800">
+                        <h3 className="text-xs font-mono uppercase tracking-widest mb-4 transition-colors duration-700 text-amber-200/70">
                             What We Noticed
                         </h3>
-                        <p
-                            className={`text-lg md:text-xl font-sentient transition-all duration-1000 ${isDayMode ? "text-neutral-700" : "text-white"
-                                }`}
-                        >
+                        <p className="text-lg md:text-xl font-sentient transition-all duration-1000 text-white">
                             {allInsights[currentInsight] || gentleInsights[0]}
                         </p>
                     </section>
 
                     {/* 5. Streak Reframe */}
                     <section className="w-full mb-16 text-center">
-                        <h3
-                            className={`text-sm font-sentient mb-3 transition-colors duration-700 ${isDayMode ? "text-neutral-500" : "text-neutral-400"
-                                }`}
-                        >
+                        <h3 className="text-xs font-mono uppercase tracking-widest mb-3 transition-colors duration-700 text-neutral-400">
                             Not a Streak
                         </h3>
-                        <p
-                            className={`text-xs md:text-sm font-mono leading-relaxed max-w-md mx-auto transition-colors duration-700 ${isDayMode ? "text-neutral-500" : "text-neutral-400"
-                                }`}
-                        >
+                        <p className="text-xs md:text-sm font-mono leading-relaxed max-w-md mx-auto transition-colors duration-700 text-neutral-400">
                             We don't track streaks here because life isn't linear.
                             <br />
                             Showing up once matters as much as showing up often.
@@ -216,16 +170,10 @@ export default function ShowingUpPage() {
 
                     {/* 6. Quiet Affirmation */}
                     <section className="w-full mb-20 text-center">
-                        <h4
-                            className={`text-xs font-mono mb-2 transition-colors duration-700 ${isDayMode ? "text-neutral-500" : "text-neutral-400"
-                                }`}
-                        >
+                        <h4 className="text-xs font-mono uppercase tracking-widest mb-4 transition-colors duration-700 text-neutral-400">
                             A Quiet Reminder
                         </h4>
-                        <p
-                            className={`text-base font-sentient italic transition-all duration-1000 ${isDayMode ? "text-neutral-600" : "text-amber-100/80"
-                                }`}
-                        >
+                        <p className="text-base font-sentient italic transition-all duration-1000 text-amber-100/80">
                             {quietReminders[currentReminder]}
                         </p>
                     </section>
@@ -235,17 +183,11 @@ export default function ShowingUpPage() {
                         <div className="text-center">
                             <Link
                                 href="/vent"
-                                className={`inline-block px-8 py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 ${isDayMode
-                                    ? "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
-                                    : "border-neutral-700 text-neutral-300 hover:bg-neutral-800"
-                                    }`}
+                                className="inline-block px-8 py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 border-neutral-700 text-neutral-300 hover:bg-neutral-800"
                             >
                                 Vent again
                             </Link>
-                            <p
-                                className={`text-xs font-mono mt-2 transition-colors duration-700 ${isDayMode ? "text-neutral-400" : "text-neutral-600"
-                                    }`}
-                            >
+                            <p className="text-xs font-mono mt-2 transition-colors duration-700 text-neutral-600">
                                 Only if you feel like it.
                             </p>
                         </div>
@@ -253,17 +195,11 @@ export default function ShowingUpPage() {
                         <div className="text-center">
                             <Link
                                 href="/mood-map"
-                                className={`inline-block px-8 py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 ${isDayMode
-                                    ? "border-neutral-200 text-neutral-500 hover:bg-neutral-50"
-                                    : "border-neutral-800 text-neutral-500 hover:bg-neutral-900"
-                                    }`}
+                                className="inline-block px-8 py-3 font-mono text-sm tracking-wider rounded-full border transition-all duration-300 border-neutral-800 text-neutral-500 hover:bg-neutral-900"
                             >
                                 View Mood Map
                             </Link>
-                            <p
-                                className={`text-xs font-mono mt-2 transition-colors duration-700 ${isDayMode ? "text-neutral-400" : "text-neutral-600"
-                                    }`}
-                            >
+                            <p className="text-xs font-mono mt-2 transition-colors duration-700 text-neutral-600">
                                 Patterns, not memories.
                             </p>
                         </div>
@@ -272,10 +208,7 @@ export default function ShowingUpPage() {
 
                 {/* 8. Privacy Reassurance Footer */}
                 <footer className="pb-8">
-                    <p
-                        className={`text-center text-xs font-mono transition-colors duration-700 ${isDayMode ? "text-neutral-300" : "text-neutral-700"
-                            }`}
-                    >
+                    <p className="text-center text-xs font-mono transition-colors duration-700 text-neutral-700">
                         This page is built from patterns, not stored content.
                     </p>
                 </footer>
@@ -283,3 +216,4 @@ export default function ShowingUpPage() {
         </div>
     )
 }
+

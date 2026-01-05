@@ -621,6 +621,207 @@ async def get_presence_data(
 
 
 # ============================================
+# Mood Map Endpoints
+# ============================================
+
+@app.get("/api/mood-map")
+async def get_mood_map_data(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get user mood map data for emotional state visualization.
+    Returns aggregated emotion patterns, time insights, and emotional style.
+    Privacy-first: Only returns derived patterns, not raw content.
+    """
+    from datetime import datetime, timezone, timedelta
+    from sqlalchemy import select, func, extract
+    from app.db_models import VentSession, VentAnalytics, EmotionCategory
+    from collections import Counter
+    
+    ip, user_agent = get_client_info(request)
+    
+    anonymous_user = await state.analytics_service.get_or_create_anonymous_user(
+        db, ip, user_agent
+    )
+    
+    # Get analytics from last 30 days
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    
+    result = await db.execute(
+        select(VentAnalytics)
+        .join(VentSession)
+        .where(
+            VentSession.anonymous_user_id == anonymous_user.id,
+            VentAnalytics.created_at >= thirty_days_ago
+        )
+    )
+    
+    analytics = result.scalars().all()
+    total_vents = len(analytics)
+    
+    if total_vents == 0:
+        # Return empty state for new users
+        return {
+            "has_data": False,
+            "emotional_load": [],
+            "processing": [],
+            "release": [],
+            "positive_shifts": [],
+            "conditional": [],
+            "time_data": None,
+            "insight": {
+                "type": "New Here",
+                "description": "You haven't vented yet. When you do, we'll start showing patterns here — not judgments, just reflections of what you've shared."
+            },
+            "most_felt_emotion": None
+        }
+    
+    # Count emotions
+    emotion_counts = Counter()
+    for a in analytics:
+        if a.emotion_category:
+            emotion_counts[a.emotion_category.value] += 1
+    
+    # Calculate percentages
+    emotion_percentages = {}
+    for emotion, count in emotion_counts.items():
+        emotion_percentages[emotion] = round((count / total_vents) * 100)
+    
+    # Map emotions to groups
+    emotional_load_emotions = ["anxiety", "stress", "sadness", "confusion", "fear", "hopelessness"]
+    processing_emotions = ["frustration", "anger", "loneliness", "grief"]
+    release_emotions = ["other"]  # We'll add more as they become detected
+    
+    # Build emotion arrays with percentages
+    emotional_load = [
+        {"emotion": e, "percentage": emotion_percentages.get(e, 0)}
+        for e in emotional_load_emotions if e in emotion_percentages
+    ]
+    
+    processing = [
+        {"emotion": e, "percentage": emotion_percentages.get(e, 0)}
+        for e in processing_emotions if e in emotion_percentages
+    ]
+    
+    # Determine release and positive shifts based on emotion intensity trends
+    avg_intensity = sum(a.emotion_intensity or 0.5 for a in analytics) / len(analytics)
+    
+    # If average intensity is decreasing over time, show release
+    release = []
+    positive_shifts = []
+    
+    if avg_intensity < 0.4:
+        release = [
+            {"emotion": "relief", "percentage": round((1 - avg_intensity) * 30)},
+            {"emotion": "calm", "percentage": round((1 - avg_intensity) * 20)},
+        ]
+        positive_shifts = [
+            {"emotion": "clarity", "percentage": round((1 - avg_intensity) * 15)},
+        ]
+    elif avg_intensity < 0.6:
+        release = [
+            {"emotion": "relief", "percentage": round((1 - avg_intensity) * 20)},
+        ]
+    
+    # Conditional emotions (joy/gratitude) - only if release is significant
+    conditional = []
+    relief_percentage = next((e["percentage"] for e in release if e["emotion"] == "relief"), 0)
+    if relief_percentage > 15 and len(positive_shifts) > 0:
+        conditional = [
+            {"emotion": "joy", "percentage": 5},
+            {"emotion": "gratitude", "percentage": 4},
+        ]
+    
+    # Time-based insights
+    hour_result = await db.execute(
+        select(func.avg(extract('hour', VentAnalytics.created_at)))
+        .join(VentSession)
+        .where(VentSession.anonymous_user_id == anonymous_user.id)
+    )
+    avg_hour = hour_result.scalar() or 12
+    
+    # Determine most active day
+    day_result = await db.execute(
+        select(
+            extract('dow', VentAnalytics.created_at).label('day'),
+            func.count().label('count')
+        )
+        .join(VentSession)
+        .where(VentSession.anonymous_user_id == anonymous_user.id)
+        .group_by(extract('dow', VentAnalytics.created_at))
+        .order_by(func.count().desc())
+        .limit(1)
+    )
+    day_row = day_result.first()
+    
+    days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    most_active_day = days[int(day_row[0]) if day_row else 0]
+    
+    # Format hour for display
+    if avg_hour >= 22 or avg_hour < 5:
+        most_active_time = f"{int(avg_hour)}:00" if avg_hour >= 22 else f"{int(avg_hour)}:00 AM"
+        time_of_day_label = "Night owl"
+    elif avg_hour >= 5 and avg_hour < 12:
+        most_active_time = f"{int(avg_hour)} AM"
+        time_of_day_label = "Early riser"
+    elif avg_hour >= 12 and avg_hour < 17:
+        most_active_time = f"{int(avg_hour - 12)} PM" if avg_hour > 12 else "12 PM"
+        time_of_day_label = "Afternoon processor"
+    else:
+        most_active_time = f"{int(avg_hour - 12)} PM"
+        time_of_day_label = "Evening reflector"
+    
+    # Determine emotional style based on patterns
+    dominant_emotions = sorted(emotion_percentages.items(), key=lambda x: x[1], reverse=True)[:3]
+    dominant = [e[0] for e in dominant_emotions]
+    
+    if "anxiety" in dominant and "stress" in dominant:
+        insight_type = "The Processor"
+        insight_desc = "You tend to carry a lot mentally before releasing it. Your vents often show the weight of overthinking — which isn't a flaw, it's just how you process. The act of venting itself seems to help you organize your thoughts."
+    elif "sadness" in dominant or "loneliness" in dominant:
+        insight_type = "The Quiet Holder"
+        insight_desc = "You hold things close before letting them out. There's a gentleness to how you express what's heavy. You don't rush your feelings — you let them arrive when they're ready."
+    elif "frustration" in dominant or "anger" in dominant:
+        insight_type = "The Direct One"
+        insight_desc = "When something bothers you, you express it. Your vents are often sharp and clear — not because you're explosive, but because you know what you feel and you don't hide it."
+    elif "confusion" in dominant:
+        insight_type = "The Seeker"
+        insight_desc = "You vent when you're trying to make sense of something. It's not always about pain — sometimes it's about clarity. You use this space to think out loud and find your footing."
+    elif avg_intensity < 0.4:
+        insight_type = "The Calm Observer"
+        insight_desc = "Your emotional intensity tends to be measured. You process calmly, even when things are hard. This suggests a practiced steadiness — not detachment, but composure."
+    else:
+        insight_type = "Resilient One"
+        insight_desc = "You tend to process emotions internally and release them in focused moments. You don't rush to express — you take time to understand what you're feeling before letting it out."
+    
+    # Most felt emotion
+    most_felt = dominant_emotions[0] if dominant_emotions else None
+    
+    return {
+        "has_data": True,
+        "emotional_load": emotional_load,
+        "processing": processing,
+        "release": release,
+        "positive_shifts": positive_shifts,
+        "conditional": conditional,
+        "time_data": {
+            "most_active_day": most_active_day,
+            "most_active_time": most_active_time,
+            "time_of_day_label": time_of_day_label
+        },
+        "insight": {
+            "type": insight_type,
+            "description": insight_desc
+        },
+        "most_felt_emotion": {
+            "emotion": most_felt[0],
+            "percentage": most_felt[1]
+        } if most_felt else None
+    }
+
+
+# ============================================
 # Data Privacy Endpoints (GDPR/CCPA)
 # ============================================
 
@@ -667,6 +868,57 @@ async def delete_user_data(
         return {"message": "All your data has been deleted", "user_id": str(user_id)}
     else:
         raise HTTPException(status_code=404, detail="User not found")
+
+
+# ============================================
+# Voice Transcription (AssemblyAI Universal Streaming v3)
+# ============================================
+
+@app.get("/api/assembly/token")
+async def get_assembly_token():
+    """
+    Generate a temporary AssemblyAI token for real-time transcription.
+    Uses the new Universal Streaming v3 API.
+    This keeps the API key secure on the backend while allowing
+    the frontend to connect directly to AssemblyAI's WebSocket.
+    """
+    import httpx
+    
+    settings = get_settings()
+    
+    if not settings.assemblyai_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Voice transcription is not configured"
+        )
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # Use the new v3 streaming token endpoint
+            response = await client.get(
+                "https://streaming.assemblyai.com/v3/token",
+                headers={"Authorization": settings.assemblyai_api_key},
+                params={
+                    "expires_in_seconds": 600,  # Token valid for 10 minutes
+                }
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"AssemblyAI token request failed: {response.text}")
+                raise HTTPException(
+                    status_code=502,
+                    detail="Failed to get transcription token"
+                )
+            
+            data = response.json()
+            return {"token": data.get("token")}
+            
+    except httpx.RequestError as e:
+        logger.error(f"AssemblyAI connection error: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail="Could not connect to transcription service"
+        )
 
 
 # Run with uvicorn

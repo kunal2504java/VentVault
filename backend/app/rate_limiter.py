@@ -33,8 +33,8 @@ class RateLimiter:
     def __init__(
         self, 
         redis_client: redis.Redis, 
-        anon_limit: int = 2,
-        signed_in_limit: int = 10,
+        anon_limit: int = 10,
+        signed_in_limit: int = 20,
         premium_limit: int = 100,
         window_seconds: int = 86400  # 24 hours
     ):
