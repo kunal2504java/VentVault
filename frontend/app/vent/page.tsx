@@ -11,6 +11,7 @@ import { ConsentBanner } from "@/components/consent-banner"
 import { PrivacySettings } from "@/components/privacy-settings"
 import { Sidebar } from "@/components/sidebar"
 import { RateLimitModal } from "@/components/rate-limit-modal"
+import { VentShredder } from "@/components/VentShredder"
 import { useAuthApi } from "@/hooks/use-auth-api"
 
 // Calming messages to show while AI is generating response
@@ -182,6 +183,8 @@ export default function VentPage() {
   // Privacy settings state
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
   const [showRateLimitModal, setShowRateLimitModal] = useState(false)
+  const [showVentShredder, setShowVentShredder] = useState(false)
+  const [shredderVentText, setShredderVentText] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Initialize auth API integration
@@ -198,12 +201,19 @@ export default function VentPage() {
     setIsChatMode(false)
     setMessages([])
     setChatInput("")
+    setShowVentShredder(false)
+    setShredderVentText("")
   }
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  const triggerVentShredder = (text: string) => {
+    setShredderVentText(text)
+    setShowVentShredder(true)
+  }
 
   const handleRelease = async () => {
     if (!ventText.trim()) return
@@ -228,6 +238,7 @@ export default function VentPage() {
       // On complete
       (metadata) => {
         setIsLoading(false)
+        triggerVentShredder(ventText)
         console.log("Session ID:", metadata.sessionId)
         console.log("Remaining vents:", metadata.remainingVents)
       },
@@ -284,6 +295,7 @@ export default function VentPage() {
       // On complete
       (metadata) => {
         setIsLoading(false)
+        triggerVentShredder(transcript)
         console.log("Session ID:", metadata.sessionId)
         console.log("Remaining vents:", metadata.remainingVents)
       },
@@ -326,6 +338,8 @@ export default function VentPage() {
     setIsChatMode(false)
     setMessages([])
     setChatInput("")
+    setShowVentShredder(false)
+    setShredderVentText("")
 
     console.log("State reset complete, ventMode set to null")
   }
@@ -730,6 +744,13 @@ export default function VentPage() {
         onClose={() => setShowRateLimitModal(false)}
         isDayMode={isDayMode}
       />
+
+      {showVentShredder && (
+        <VentShredder
+          ventText={shredderVentText}
+          onComplete={() => setShowVentShredder(false)}
+        />
+      )}
     </>
   )
 }
